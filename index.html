@@ -339,40 +339,6 @@ strong {
 .game-save-btn{width:100%;padding:11px;background:linear-gradient(135deg,#1b5e20,#2e7d32);border:none;border-radius:10px;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;margin-top:12px}
 
 
-/* ══ 共有・レポート機能 ══ */
-.share-btn{position:fixed;bottom:80px;right:16px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#0f2d5e,#2b72f5);border:none;color:#fff;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(15,45,94,.35);z-index:50;display:flex;align-items:center;justify-content:center}
-.share-modal{display:none;position:fixed;inset:0;background:rgba(10,20,50,.65);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;padding:20px}
-.share-modal.open{display:flex}
-.share-box{background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:340px;text-align:center}
-.share-box h2{font-size:17px;font-weight:900;color:#0f2d5e;margin-bottom:4px}
-.share-box p{font-size:12px;color:#7a99cc;margin-bottom:14px;line-height:1.6}
-#share-qr{margin:0 auto 14px;width:200px;height:200px;background:#f8fbff;border-radius:12px;display:flex;align-items:center;justify-content:center}
-.share-url{font-size:10px;color:#7a99cc;word-break:break-all;margin-bottom:14px;background:#f8fbff;padding:8px;border-radius:8px;text-align:left;cursor:pointer;border:1.5px solid #ddeeff}
-.share-close{width:100%;padding:11px;background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:12px;color:#3a5080;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
-
-/* レポート画面 */
-.report-wrap{padding:20px 16px;max-width:480px;margin:0 auto}
-.report-hdr{text-align:center;padding:20px 0 16px}
-.report-hdr h1{font-size:22px;font-weight:900;color:#0f2d5e}
-.report-hdr p{font-size:13px;color:#7a99cc;margin-top:4px}
-.report-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.report-stat{background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:0 2px 12px rgba(15,45,94,.08)}
-.report-stat-num{font-family:'Nunito',sans-serif;font-size:32px;font-weight:900;color:#0f2d5e;line-height:1}
-.report-stat-lbl{font-size:11px;color:#7a99cc;font-weight:700;margin-top:4px}
-.report-section{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 2px 12px rgba(15,45,94,.08)}
-.report-section-ttl{font-size:13px;font-weight:900;color:#0f2d5e;margin-bottom:10px}
-.report-week-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.report-week-lbl{font-size:11px;font-weight:700;color:#3a5080;width:40px;flex-shrink:0}
-.report-week-bar{flex:1;background:#f0f6ff;border-radius:99px;height:8px;overflow:hidden}
-.report-week-fill{height:100%;border-radius:99px;transition:width .6s}
-.report-week-pct{font-size:11px;font-weight:800;color:#0f2d5e;width:32px;text-align:right;flex-shrink:0}
-.report-word-list{max-height:200px;overflow-y:auto}
-.report-word-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f6ff;font-size:12px}
-.report-word-item:last-child{border-bottom:none}
-.report-badge{padding:2px 8px;border-radius:99px;font-size:10px;font-weight:800}
-.report-badge.ok{background:#dcfce7;color:#16a34a}
-.report-badge.ng{background:#ffe4e6;color:#e11d48}
-.report-badge.skip{background:#f0f6ff;color:#7a99cc}
 
 
 /* ══ クラウド同期設定 ══ */
@@ -386,7 +352,6 @@ strong {
 .sync-input:focus{border-color:#2b72f5;background:#fff}
 
 </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -476,20 +441,6 @@ strong {
 <!-- ══ 管理画面 ══ -->
 <div id="admin-view">
   <!-- パスワード画面 -->
-  <!-- 📤 共有ボタン（メイン画面のみ表示） -->
-  <button class="share-btn" id="share-fab" onclick="openShareModal()" title="学習状況を共有">📤</button>
-
-  <!-- 共有モーダル -->
-  <div class="share-modal" id="share-modal">
-    <div class="share-box">
-      <h2>📤 学習状況を共有</h2>
-      <p>保護者のスマホでQRコードを読み取ると<br>学習レポートを確認できます</p>
-      <div id="share-qr"><span style="color:#c0c0c0;font-size:12px">生成中...</span></div>
-      <div class="share-url" id="share-url" onclick="copyShareUrl()">タップでURLをコピー</div>
-      <button class="share-close" onclick="closeShareModal()">閉じる</button>
-    </div>
-  </div>
-
   <div id="adm-pw-screen" class="adm-pw">
     <div class="adm-pw-box">
       <h2>🔐 管理者ログイン</h2>
@@ -3687,6 +3638,11 @@ function startAutoSync(){
 
 // ─── 保護者閲覧 ───────────────────────────────────────
 
+function closeParentReport(){
+  const el = document.getElementById('parent-report-overlay');
+  if(el) el.remove();
+}
+
 // JSONBinからデータを読み込んで学習レポートを表示
 async function viewReport(){
   const apiKey = (document.getElementById('view-api-key')||{}).value?.trim();
@@ -3717,73 +3673,115 @@ async function viewReport(){
 // クラウドレポートをモーダルで表示
 function showCloudReport(p){
   const allDays = (typeof getAllDays === 'function') ? getAllDays() : DAYS;
-  const summary = p.summary || {};
   const ts = p.ts ? new Date(p.ts).toLocaleString('ja-JP') : '不明';
 
   // 正解率計算
   let totalAns=0, totalOk=0;
   allDays.forEach((d,i)=>{
     if(d.mode!=='quiz') return;
-    const ans = (p.ans||{})[i];
+    const ans=(p.ans||{})[i];
     if(!ans) return;
-    if(d.words){ d.words.forEach((w,wi)=>{ if(ans[wi]!==undefined){totalAns++;if(ans[wi]===w.ok)totalOk++;} }); }
+    if(d.words) d.words.forEach((w,wi)=>{ if(ans[wi]!==undefined){totalAns++;if(ans[wi]===w.ok)totalOk++;} });
   });
   const rate = totalAns>0 ? Math.round(totalOk/totalAns*100) : 0;
-  const gameMin = (p.game||{}).min || 0;
+  const doneDays = Object.values(p.done||{}).filter(Boolean).length;
+  const totalQuizDays = allDays.filter(d=>d.mode==='quiz').length;
+  const streak = p.streak||0;
+  const gameMin = (p.game||{}).min||0;
 
   // 週別集計
-  const weeks = [];
+  const weeks=[];
   for(let w=0;w<8;w++){
-    let wAns=0,wOk=0,wHas=false;
+    let wAns=0,wOk=0,wTotal=0;
     allDays.forEach((d,i)=>{
-      if(d.mode!=='quiz'||Math.floor(i/7)!==w) return;
-      const ans=(p.ans||{})[i];
-      if(!ans) return;
-      wHas=true;
-      if(d.words) d.words.forEach((wd,wi)=>{if(ans[wi]!==undefined){wAns++;if(ans[wi]===wd.ok)wOk++;}});
+      if(d.mode!=='quiz'||Math.floor(i/7)!==w)return;
+      const ans=(p.ans||{})[i]; if(!ans)return;
+      if(d.words) d.words.forEach((wd,wi)=>{ wTotal++; if(ans[wi]!==undefined){wAns++;if(ans[wi]===wd.ok)wOk++;} });
     });
-    if(wHas) weeks.push({w:w+1,ans:wAns,ok:wOk});
+    if(wTotal>0) weeks.push({w:w+1,ans:wAns,ok:wOk,total:wTotal});
   }
 
-  const modal = document.createElement('div');
-  modal.style.cssText='position:fixed;inset:0;background:rgba(10,20,50,.7);z-index:300;overflow-y:auto;padding:20px';
-  modal.innerHTML = `
-    <div style="background:#eef3fb;max-width:400px;margin:0 auto;border-radius:20px;overflow:hidden;padding-bottom:20px">
-      <div style="background:linear-gradient(135deg,#0f2d5e,#1a4a9e);padding:20px;text-align:center;color:#fff">
-        <div style="font-size:28px;margin-bottom:4px">📊</div>
-        <div style="font-size:18px;font-weight:900">学習レポート</div>
-        <div style="font-size:11px;opacity:.8;margin-top:4px">最終更新: ${ts}</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 14px 0">
-        ${[
-          ['学習日数', (summary.doneDays||Object.values(p.done||{}).filter(Boolean).length)+'日', '#0f2d5e'],
-          ['連続記録', (p.streak||0)+'日 🔥', '#e65100'],
-          ['正解率',   rate+'%', rate>=80?'#16a34a':rate>=50?'#f59e0b':'#e11d48'],
-          ['今日のSwitch', gameMin+'分 🎮', '#1b5e20']
-        ].map(([lbl,val,col])=>`
-          <div style="background:#fff;border-radius:12px;padding:12px;text-align:center">
-            <div style="font-size:24px;font-weight:900;color:${col};font-family:'Nunito',sans-serif">${val}</div>
-            <div style="font-size:10px;color:#7a99cc;font-weight:700;margin-top:2px">${lbl}</div>
-          </div>`).join('')}
-      </div>
-      ${weeks.length>0?`
-      <div style="background:#fff;border-radius:12px;margin:10px 14px 0;padding:12px">
-        <div style="font-size:12px;font-weight:900;color:#0f2d5e;margin-bottom:8px">📈 週別正解率</div>
-        ${weeks.map(w=>{
-          const pct = w.ans>0?Math.round(w.ok/w.ans*100):0;
-          const col = pct>=80?'#22c55e':pct>=50?'#f59e0b':'#ef4444';
-          return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-            <div style="font-size:11px;font-weight:700;color:#3a5080;width:36px">${w.w}週目</div>
-            <div style="flex:1;background:#f0f6ff;border-radius:99px;height:8px;overflow:hidden">
-              <div style="width:${Math.min(pct,100)}%;height:100%;background:${col};border-radius:99px"></div>
-            </div>
-            <div style="font-size:11px;font-weight:800;color:#0f2d5e;width:30px;text-align:right">${pct}%</div>
-          </div>`;
-        }).join('')}
-      </div>`:''}
-      <button onclick="this.closest('[style]').remove()" style="display:block;width:calc(100% - 28px);margin:12px 14px 0;padding:12px;background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:12px;font-family:inherit;font-size:13px;font-weight:700;color:#3a5080;cursor:pointer">閉じる</button>
-    </div>`;
-  document.body.appendChild(modal);
+  // 日別回答履歴
+  let histHtml='';
+  allDays.forEach((d,i)=>{
+    if(d.mode!=='quiz') return;
+    const isDone=!!(p.done||{})[i];
+    const ans=(p.ans||{})[i];
+    const words=d.words||[];
+    let badge='';
+    if(!isDone){
+      badge='<span class="ds-badge ds-none">未学習</span>';
+    } else if(words.length>0){
+      const wTotal=words.length;
+      const wCorrect=words.filter((w,wi)=>ans&&ans[wi]===w.ok).length;
+      const wAnswered=words.filter((w,wi)=>ans&&ans[wi]!==undefined).length;
+      if(wCorrect===wTotal) badge='<span class="ds-badge ds-ok">全問正解✓</span>';
+      else if(wAnswered===wTotal) badge='<span class="ds-badge ds-ng">'+wCorrect+'/'+wTotal+'正解</span>';
+      else badge='<span class="ds-badge ds-done">'+wAnswered+'/'+wTotal+'回答済</span>';
+    } else {
+      badge=ans===undefined?'<span class="ds-badge ds-none">未回答</span>':'<span class="ds-badge ds-done">回答済</span>';
+    }
+    histHtml+='<div class="ds-row"><span class="ds-label">'+d.label+'</span>'+badge+'</div>';
+  });
+
+  // オーバーレイで管理画面スタイルのレポートを表示
+  const overlay = document.createElement('div');
+  overlay.id = 'parent-report-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:#eef3fb;z-index:400;overflow-y:auto;-webkit-overflow-scrolling:touch';
+
+  let html='';
+
+  // 管理画面と同じヘッダー
+  html+='<div style="background:linear-gradient(135deg,#0f2d5e,#1a4a9e);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1">';
+  html+='<div style="font-size:15px;font-weight:900;color:#fff">📊 保護者レポート<div style="font-size:10px;font-weight:500;opacity:.8;margin-top:1px">最終更新: '+ts+'</div></div>';
+  html+='<button onclick="closeParentReport()" style="background:rgba(255,255,255,.2);border:none;border-radius:99px;color:#fff;font-size:13px;font-weight:700;padding:6px 14px;cursor:pointer;font-family:inherit">✕ 閉じる</button>';
+  html+='</div>';
+
+  html+='<div class="adm-body">';
+
+  // サマリーカード（管理画面と同じスタイル）
+  html+='<div class="adm-section"><div class="adm-card">';
+  html+='<div class="adm-card-ttl">📈 学習サマリー</div>';
+  html+='<div class="adm-card-body">';
+  html+='<div class="stat-grid">';
+  html+='<div class="stat-cell"><div class="stat-num">'+doneDays+'</div><div class="stat-lbl">学習日数</div></div>';
+  html+='<div class="stat-cell"><div class="stat-num">'+totalQuizDays+'</div><div class="stat-lbl">総日数</div></div>';
+  html+='<div class="stat-cell"><div class="stat-num">'+rate+'%</div><div class="stat-lbl">正解率</div></div>';
+  html+='<div class="stat-cell"><div class="stat-num">'+streak+'</div><div class="stat-lbl">連続日数🔥</div></div>';
+  html+='</div>';
+  html+='<div style="margin-top:10px;padding:10px 12px;background:#f8fbff;border-radius:10px;font-size:12px;color:#3a5080;font-weight:700">';
+  html+='🎮 今日のSwitch時間: <span style="color:#0d1b38;font-size:14px;font-weight:900">'+gameMin+'分</span>';
+  html+='</div>';
+  html+='</div></div></div>';
+
+  // 週別正解率（管理画面と同じスタイル）
+  if(weeks.length>0){
+    html+='<div class="adm-section"><div class="adm-card">';
+    html+='<div class="adm-card-ttl">📊 週別 正答率</div>';
+    html+='<div class="adm-card-body"><div class="chart-bar-wrap">';
+    weeks.forEach(w=>{
+      const pct = w.ans>0?Math.round(w.ok/w.ans*100):0;
+      const barW = Math.min(pct,100);
+      const color = pct>=80?'#22c55e':pct>=50?'#f59e0b':'#ef4444';
+      html+='<div class="chart-row">';
+      html+='<div class="chart-lbl">'+w.w+'週目</div>';
+      html+='<div class="chart-bar-outer"><div class="chart-bar-inner" style="width:'+barW+'%;background:'+color+'"></div></div>';
+      html+='<div class="chart-pct">'+pct+'%</div>';
+      html+='</div>';
+    });
+    html+='</div></div></div>';
+  }
+
+  // 日別回答履歴（管理画面と同じスタイル）
+  html+='<div class="adm-section"><div class="adm-card">';
+  html+='<div class="adm-card-ttl">📅 日別 回答履歴</div>';
+  html+='<div class="adm-card-body"><div class="ds-list">'+histHtml+'</div></div>';
+  html+='</div></div>';
+
+  html+='</div>'; // adm-body閉じ
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
 }
 
 // ══════════════════════════════════════════════════════
