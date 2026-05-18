@@ -2951,20 +2951,12 @@ function renderUserAdmin(){
   html += '<div class="adm-section"><div class="adm-card">';
   html += '<div class="adm-card-ttl">☁️ クラウド同期</div>';
   html += '<div class="adm-card-body">';
-  if(!syncCfg.apiKey){
-    html += '<p style="font-size:12px;color:#3a5080;line-height:1.7;margin-bottom:10px">保護者が学習状況を確認できるよう設定します。<br>詳しい設定は管理者ログインから。</p>';
-    html += '<label style="font-size:12px;font-weight:700;color:#0d1b38">JSONBin APIキー</label>';
-    html += '<input class="sync-input" id="usr-api-key" type="password" placeholder="$2a$10$...">';
-    html += '<button class="game-save-btn" style="margin-top:8px" onclick="userInitSync()">🚀 同期開始</button>';
-    html += '<div id="usr-sync-result" style="margin-top:8px;font-size:12px"></div>';
-  } else {
-    html += '<p style="font-size:12px;color:#15803d;font-weight:700;margin-bottom:8px">✅ 同期設定済み</p>';
-    html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:10px">最終同期: '+(syncCfg.lastSync?new Date(syncCfg.lastSync).toLocaleString('ja-JP'):'未同期')+'</p>';
-    html += '<div style="display:flex;gap:8px">';
-    html += '<button class="game-save-btn" style="margin-top:0" onclick="manualSync()">☁️ 今すぐ同期</button>';
-    html += '<button class="game-save-btn" style="margin-top:0;background:linear-gradient(135deg,#b91c1c,#ef4444)" onclick="clearSyncConfig()">解除</button>';
-    html += '</div>';
-  }
+  // 固定設定済みなのでシンプルに同期ボタンのみ表示
+  html += '<p style="font-size:12px;color:#3a5080;line-height:1.6;margin-bottom:10px">';
+  html += '学習が終わったら「今すぐ同期」を押すと、<br>保護者のスマホから学習状況が確認できます。</p>';
+  html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:10px">最終同期: '+(syncCfg.lastSync?new Date(syncCfg.lastSync).toLocaleString('ja-JP'):'まだ同期していません')+'</p>';
+  html += '<button class="game-save-btn" style="margin-top:0" onclick="manualSync()">☁️ 今すぐ同期する</button>';
+  html += '<div id="usr-sync-result" style="margin-top:8px;font-size:12px"></div>';
   html += '</div></div></div>';
 
   document.getElementById('adm-body').innerHTML = html;
@@ -3188,13 +3180,9 @@ function renderAdmin(){
     '</div>' +
     (syncCfg.binId ? '<div style="margin-top:8px;font-size:11px;color:#7a99cc">最終同期: <span id="last-sync-time">' + (syncCfg.lastSync ? new Date(syncCfg.lastSync).toLocaleString('ja-JP') : '未同期') + '</span></div>' : '') +
     '<hr style="margin:14px 0;border:none;border-top:1px solid #f0f6ff">' +
-    '<p style="font-size:12px;font-weight:700;color:#0d1b38;margin-bottom:6px">🔍 保護者として閲覧する</p>' +
-    '<p style="font-size:11px;color:#7a99cc;margin-bottom:6px">息子のスマホで設定したAPIキーとBin IDを入力</p>' +
-    '<label style="font-size:12px;font-weight:700;color:#0d1b38">閲覧用 APIキー</label>' +
-    '<input class="sync-input" id="view-api-key" type="password" placeholder="息子のスマホのAPIキー">' +
-    '<label style="font-size:12px;font-weight:700;color:#0d1b38;display:block;margin-top:8px">閲覧用 Bin ID</label>' +
-    '<input class="sync-input" id="view-bin-id" placeholder="息子のスマホのBin ID">' +
-    '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="viewReport()">📊 学習レポートを見る</button>' +
+    '<p style="font-size:12px;font-weight:700;color:#0d1b38;margin-bottom:6px">🔍 子供の学習レポートを見る</p>' +
+    '<p style="font-size:11px;color:#7a99cc;margin-bottom:8px">子供がアップロードした最新データを表示します</p>' +
+    '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="viewReportFixed()">📊 学習レポートを見る</button>' +
     '<div id="view-result" style="margin-top:8px"></div>' +
     '</div></div></div>';
 
@@ -3679,13 +3667,33 @@ const _origCloseReview = closeReviewModal;
 
 const SYNC_CFG_KEY = 'vq_sync_cfg';
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
+// ── 固定のクラウド設定 ──
+const FIXED_API_KEY = '$2a$10$ZOt9s5J/gBSN/2Ys39.M4.pPN3l6jGnIkFfBkUk1kpGu8xYQyBvXC';
+const FIXED_BIN_ID  = '6a0a7d32adc21f119ab72583';
 
 function getSyncConfig(){
-  try{ return JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}'); }
-  catch(e){ return {}; }
+  try{
+    const stored = JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}');
+    // 未設定なら固定値を使う
+    if(!stored.apiKey) stored.apiKey = FIXED_API_KEY;
+    if(!stored.binId)  stored.binId  = FIXED_BIN_ID;
+    return stored;
+  } catch(e){
+    return { apiKey: FIXED_API_KEY, binId: FIXED_BIN_ID };
+  }
 }
 function saveSyncConfig(cfg){
   try{ localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
+}
+
+// 固定設定を自動的にlocalStorageに保存（初回のみ）
+function applyFixedSyncConfig(){
+  const cfg = getSyncConfig();
+  if(!cfg.apiKey || cfg.apiKey !== FIXED_API_KEY || !cfg.binId || cfg.binId !== FIXED_BIN_ID){
+    cfg.apiKey = FIXED_API_KEY;
+    cfg.binId  = FIXED_BIN_ID;
+    saveSyncConfig(cfg);
+  }
 }
 
 // 同期ボタンの表示制御
@@ -3826,19 +3834,13 @@ function closeParentReport(){
   if(el) el.remove();
 }
 
-// JSONBinからデータを読み込んで学習レポートを表示
-async function viewReport(){
-  const apiKey = (document.getElementById('view-api-key')||{}).value?.trim();
-  const binId  = (document.getElementById('view-bin-id')||{}).value?.trim();
-  const resEl  = document.getElementById('view-result');
-  if(!apiKey || !binId){
-    if(resEl){ resEl.style.cssText='color:#e11d48;font-size:12px'; resEl.textContent='⚠️ APIキーとBin IDの両方を入力してください'; }
-    return;
-  }
+// JSONBinからデータを読み込んで学習レポートを表示（固定キー版）
+async function viewReportFixed(){
+  const resEl = document.getElementById('view-result');
   if(resEl){ resEl.style.cssText='color:#a16207;font-size:12px'; resEl.textContent='⏳ データを取得中...'; }
   try{
-    const res = await fetch(JSONBIN_BASE + '/b/' + binId + '/latest', {
-      headers: { 'X-Master-Key': apiKey, 'X-Bin-Meta': 'false' }
+    const res = await fetch(JSONBIN_BASE + '/b/' + FIXED_BIN_ID + '/latest', {
+      headers: { 'X-Master-Key': FIXED_API_KEY, 'X-Bin-Meta': 'false' }
     });
     if(!res.ok){
       const err = await res.json().catch(()=>({}));
@@ -3851,6 +3853,11 @@ async function viewReport(){
   }catch(e){
     if(resEl){ resEl.style.cssText='color:#e11d48;font-size:12px'; resEl.textContent='❌ エラー: ' + e.message; }
   }
+}
+
+// 旧viewReport（互換性のため残す）
+async function viewReport(){
+  viewReportFixed();
 }
 
 // クラウドレポートをモーダルで表示
@@ -3975,6 +3982,7 @@ render();
 checkHash();
 updateReviewBadge();
 renderGameBanner();
+applyFixedSyncConfig(); // 固定設定を自動セット
 updateSyncBtn();
 startAutoSync();
 // チャットボタンを押した時にキーがなければ自動表示（起動時は表示しない）
