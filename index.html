@@ -442,21 +442,30 @@ strong {
 <div id="admin-view">
   <!-- パスワード画面 -->
   <div id="adm-pw-screen" class="adm-pw">
-    <div class="adm-pw-box">
+    <!-- ① モード選択 -->
+    <div class="adm-pw-box" id="adm-mode-select">
+      <h2>⚙️ メニュー</h2>
+      <p>どちらでログインしますか？</p>
+      <button class="adm-pw-btn" style="margin-bottom:10px" onclick="selectMode('user')">👤 学習者としてログイン</button>
+      <button class="adm-pw-btn" style="background:linear-gradient(135deg,#374151,#6b7280);margin-bottom:10px" onclick="selectMode('admin')">🔐 管理者としてログイン</button>
+      <button onclick="closeAdmin()" style="margin-top:4px;width:100%;padding:11px;background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:12px;color:#3a5080;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">← アプリに戻る</button>
+    </div>
+    <!-- ② 管理者パスワード入力 -->
+    <div class="adm-pw-box" id="adm-admin-login" style="display:none">
       <h2>🔐 管理者ログイン</h2>
-      <p>保護者用管理画面です<br>パスワードを入力してください</p>
+      <p>パスワードを入力してください</p>
       <input class="adm-pw-input" id="adm-pw-inp" type="password" placeholder="••••" maxlength="8"
         onkeydown="if(event.key==='Enter')admLogin()">
       <div class="adm-pw-err" id="adm-pw-err"></div>
       <button class="adm-pw-btn" onclick="admLogin()">ログイン</button>
-      <button onclick="closeAdmin()" style="margin-top:10px;width:100%;padding:11px;background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:12px;color:#3a5080;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">← アプリに戻る</button>
+      <button onclick="selectMode(null)" style="margin-top:10px;width:100%;padding:11px;background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:12px;color:#3a5080;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;">← 戻る</button>
     </div>
   </div>
   <!-- メイン管理画面 -->
   <div id="adm-main" style="display:none">
     <div class="adm-hdr">
-      <div class="adm-hdr-ic">📊</div>
-      <h1>管理画面</h1>
+      <div class="adm-hdr-ic" id="adm-hdr-ic">📊</div>
+      <h1 id="adm-hdr-title">管理画面</h1>
       <button class="adm-back" onclick="closeAdmin()">← アプリに戻る</button>
     </div>
     <div class="adm-body" id="adm-body"></div>
@@ -2760,10 +2769,36 @@ const ADM_PW = '1234'; // ← パスワード（変更可）
 function openAdmin(){
   document.getElementById('app').style.display = 'none';
   document.getElementById('admin-view').style.display = 'block';
+  // 常にモード選択画面から始まる
+  showAdmScreen('mode-select');
+}
+
+// モード選択
+function selectMode(mode){
+  if(mode === 'user'){
+    // ユーザーログイン：パスなしで即入る
+    document.getElementById('adm-pw-screen').style.display = 'none';
+    document.getElementById('adm-main').style.display = 'block';
+    renderUserAdmin();
+  } else if(mode === 'admin'){
+    // 管理者ログイン：パスワード画面へ
+    showAdmScreen('admin-login');
+    const inp = document.getElementById('adm-pw-inp');
+    if(inp){ inp.value=''; inp.focus(); }
+    document.getElementById('adm-pw-err').textContent = '';
+  } else {
+    // null = 管理者loginから戻る
+    showAdmScreen('mode-select');
+  }
+}
+
+function showAdmScreen(id){
   document.getElementById('adm-pw-screen').style.display = 'flex';
   document.getElementById('adm-main').style.display = 'none';
-  document.getElementById('adm-pw-inp').value = '';
-  document.getElementById('adm-pw-err').textContent = '';
+  ['adm-mode-select','adm-admin-login'].forEach(s=>{
+    const el = document.getElementById(s);
+    if(el) el.style.display = s === ('adm-'+id) ? 'block' : 'none';
+  });
 }
 
 function resetAllData(){
@@ -2807,13 +2842,17 @@ function saveGameSettingsFromAdmin(){
 }
 
 function closeAdmin(){
+  _isAdmin = false;
   document.getElementById('admin-view').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
 }
 
+let _isAdmin = false; // 管理者ログイン済みフラグ
+
 function admLogin(){
   const v = document.getElementById('adm-pw-inp').value;
   if(v === ADM_PW){
+    _isAdmin = true;
     document.getElementById('adm-pw-screen').style.display = 'none';
     document.getElementById('adm-main').style.display = 'block';
     renderAdmin();
@@ -2821,6 +2860,137 @@ function admLogin(){
     document.getElementById('adm-pw-err').textContent = 'パスワードが違います';
     document.getElementById('adm-pw-inp').value = '';
   }
+}
+
+// ══ ユーザー向け管理画面（学習者ログイン時） ══
+function renderUserAdmin(){
+  let html = '';
+  const allDays = (typeof getAllDays === 'function') ? getAllDays() : DAYS;
+
+  // 学習サマリー
+  let totalAns=0, totalOk=0;
+  allDays.forEach((d,i)=>{
+    if(d.mode!=='quiz') return;
+    const ans = ST.ans[i];
+    if(!ans) return;
+    if(d.words) d.words.forEach((w,wi)=>{ if(ans[wi]!==undefined){totalAns++;if(ans[wi]===w.ok)totalOk++;} });
+  });
+  const rate     = totalAns>0 ? Math.round(totalOk/totalAns*100) : 0;
+  const doneDays = Object.values(ST.done).filter(Boolean).length;
+  const totalQ   = allDays.filter(d=>d.mode==='quiz').length;
+
+  html += '<div class="adm-section"><div class="adm-card">';
+  html += '<div class="adm-card-ttl">📈 学習サマリー</div>';
+  html += '<div class="adm-card-body">';
+  html += '<div class="stat-grid">';
+  html += '<div class="stat-cell"><div class="stat-num">'+doneDays+'</div><div class="stat-lbl">学習日数</div></div>';
+  html += '<div class="stat-cell"><div class="stat-num">'+totalQ+'</div><div class="stat-lbl">総日数</div></div>';
+  html += '<div class="stat-cell"><div class="stat-num">'+rate+'%</div><div class="stat-lbl">正解率</div></div>';
+  html += '<div class="stat-cell"><div class="stat-num">'+ST.streak+'</div><div class="stat-lbl">連続日数🔥</div></div>';
+  html += '</div></div></div></div>';
+
+  // 日別回答履歴
+  html += '<div class="adm-section"><div class="adm-card">';
+  html += '<div class="adm-card-ttl">📅 日別 回答履歴</div>';
+  html += '<div class="adm-card-body"><div class="ds-list">';
+  allDays.forEach((d,i)=>{
+    if(d.mode !== 'quiz') return;
+    const isDone = !!ST.done[i];
+    const ans    = ST.ans[i];
+    let badge = '';
+    if(!isDone){
+      badge = '<span class="ds-badge ds-none">未学習</span>';
+    } else if(d.words){
+      const wT = d.words.length;
+      const wC = d.words.filter((w,wi)=>ans&&ans[wi]===w.ok).length;
+      const wA = d.words.filter((w,wi)=>ans&&ans[wi]!==undefined).length;
+      if(wC===wT)      badge='<span class="ds-badge ds-ok">全問正解✓</span>';
+      else if(wA===wT) badge='<span class="ds-badge ds-ng">'+wC+'/'+wT+'正解</span>';
+      else             badge='<span class="ds-badge ds-done">'+wA+'/'+wT+'回答済</span>';
+    } else {
+      badge = '<span class="ds-badge ds-ok">正解✓</span>';
+    }
+    html += '<div class="ds-row"><span class="ds-label">'+d.label+'</span>'+badge+'</div>';
+  });
+  html += '</div></div></div></div>';
+
+  // Switch時間
+  const gameCfg = loadGameSettings();
+  const gKey    = 'vq_game_' + todayKey();
+  let gd = {};
+  try{ gd = JSON.parse(localStorage.getItem(gKey)||'{}'); }catch(e){}
+  const totalMin = calcTotalGameMin(gd);
+  const maxMin   = gameCfg.maxMin || 90;
+  const pct      = Math.min(Math.round(totalMin/maxMin*100), 100);
+  html += '<div class="adm-section"><div class="adm-card">';
+  html += '<div class="adm-card-ttl">🎮 今日のSwitch時間</div>';
+  html += '<div class="adm-card-body">';
+  html += '<div style="text-align:center;margin-bottom:12px">';
+  html += '<span style="font-size:44px;font-weight:900;font-family:Nunito,sans-serif;color:#0f2d5e">'+totalMin+'</span>';
+  html += '<span style="font-size:16px;color:#7a99cc;font-weight:700"> / '+maxMin+' 分</span>';
+  html += '</div>';
+  html += '<div style="background:#f0f6ff;border-radius:99px;height:12px;overflow:hidden">';
+  html += '<div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#1a4a9e,#2b72f5);border-radius:99px;transition:width .6s"></div>';
+  html += '</div></div></div></div>';
+
+  // クラウド同期（保護者閲覧セクションなし）
+  const syncCfg = getSyncConfig();
+  html += '<div class="adm-section"><div class="adm-card">';
+  html += '<div class="adm-card-ttl">☁️ クラウド同期</div>';
+  html += '<div class="adm-card-body">';
+  if(!syncCfg.apiKey){
+    html += '<p style="font-size:12px;color:#3a5080;line-height:1.7;margin-bottom:10px">保護者が学習状況を確認できるよう設定します。<br>詳しい設定は管理者ログインから。</p>';
+    html += '<label style="font-size:12px;font-weight:700;color:#0d1b38">JSONBin APIキー</label>';
+    html += '<input class="sync-input" id="usr-api-key" type="password" placeholder="$2a$10$...">';
+    html += '<button class="game-save-btn" style="margin-top:8px" onclick="userInitSync()">🚀 同期開始</button>';
+    html += '<div id="usr-sync-result" style="margin-top:8px;font-size:12px"></div>';
+  } else {
+    html += '<p style="font-size:12px;color:#15803d;font-weight:700;margin-bottom:8px">✅ 同期設定済み</p>';
+    html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:10px">最終同期: '+(syncCfg.lastSync?new Date(syncCfg.lastSync).toLocaleString('ja-JP'):'未同期')+'</p>';
+    html += '<div style="display:flex;gap:8px">';
+    html += '<button class="game-save-btn" style="margin-top:0" onclick="manualSync()">☁️ 今すぐ同期</button>';
+    html += '<button class="game-save-btn" style="margin-top:0;background:linear-gradient(135deg,#b91c1c,#ef4444)" onclick="clearSyncConfig()">解除</button>';
+    html += '</div>';
+  }
+  html += '</div></div></div>';
+
+  document.getElementById('adm-body').innerHTML = html;
+  // ヘッダーをユーザー向けに変更
+  const hdrIc = document.getElementById('adm-hdr-ic');
+  const hdrTtl = document.getElementById('adm-hdr-title');
+  if(hdrIc)  hdrIc.textContent = '👤';
+  if(hdrTtl) hdrTtl.textContent = '学習メニュー';
+  requestAnimationFrame(()=>{ if(typeof initUploadTemplate==='function') initUploadTemplate(); });
+}
+
+// ユーザー画面から同期初期化
+async function userInitSync(){
+  const apiKey = (document.getElementById('usr-api-key')||{}).value?.trim();
+  const resEl  = document.getElementById('usr-sync-result');
+  if(!apiKey){ if(resEl){resEl.style.color='#e11d48';resEl.textContent='⚠️ APIキーを入力してください';} return; }
+  if(resEl){ resEl.style.color='#a16207'; resEl.textContent='⏳ Bin作成中...'; }
+  try{
+    const res = await fetch('https://api.jsonbin.io/v3/b', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Master-Key':apiKey,'X-Bin-Name':'VocabularyQuest','X-Bin-Private':'true'},
+      body: JSON.stringify(buildSyncPayload())
+    });
+    const data = await res.json();
+    if(!res.ok||!data.metadata?.id){ if(resEl){resEl.style.color='#e11d48';resEl.textContent='❌ '+(data.message||'Bin作成失敗');} return; }
+    const cfg = {apiKey, binId:data.metadata.id, lastSync:Date.now()};
+    saveSyncConfig(cfg);
+    updateSyncBtn();
+    if(resEl){resEl.style.color='#15803d';resEl.textContent='✅ 設定完了！Bin ID: '+data.metadata.id;}
+    renderUserAdmin();
+  }catch(e){ if(resEl){resEl.style.color='#e11d48';resEl.textContent='❌ '+e.message;} }
+}
+
+// 同期設定を解除
+function clearSyncConfig(){
+  if(!confirm('同期設定を解除しますか？')) return;
+  localStorage.removeItem(SYNC_CFG_KEY);
+  updateSyncBtn();
+  renderUserAdmin();
 }
 
 function renderAdmin(){
