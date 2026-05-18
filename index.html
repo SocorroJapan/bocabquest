@@ -351,6 +351,15 @@ strong {
 .sync-input{width:100%;padding:10px 12px;border:2px solid #ddeeff;border-radius:10px;font-family:monospace;font-size:12px;color:#0d1b38;outline:none;margin-top:6px;background:#f8fbff}
 .sync-input:focus{border-color:#2b72f5;background:#fff}
 
+.stat-cell{background:#fff;border-radius:12px;padding:12px 10px;text-align:center;box-shadow:0 2px 8px rgba(15,45,94,.07)}
+.ds-list{display:flex;flex-direction:column;gap:4px}
+.ds-row{display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid #f0f6ff;font-size:13px;font-weight:600;color:#0d1b38}
+.ds-row:last-child{border-bottom:none}
+.ds-label{flex:1;min-width:0}
+.ds-none{background:#f0f6ff;color:#7a99cc}
+.ds-ok{background:#dcfce7;color:#16a34a}
+.ds-ng{background:#ffe4e6;color:#e11d48}
+.ds-done{background:#fef9c3;color:#a16207}
 </style>
 </head>
 <body>
@@ -2778,7 +2787,9 @@ function selectMode(mode){
   if(mode === 'user'){
     // ユーザーログイン：パスなしで即入る
     document.getElementById('adm-pw-screen').style.display = 'none';
-    document.getElementById('adm-main').style.display = 'block';
+    const admMain = document.getElementById('adm-main');
+    admMain.style.display = 'block';
+    admMain.scrollTop = 0;
     renderUserAdmin();
   } else if(mode === 'admin'){
     // 管理者ログイン：パスワード画面へ
@@ -2843,6 +2854,8 @@ function saveGameSettingsFromAdmin(){
 
 function closeAdmin(){
   _isAdmin = false;
+  // adm-main を非表示に戻す（次回 openAdmin で正しくモード選択から始まるよう）
+  document.getElementById('adm-main').style.display = 'none';
   document.getElementById('admin-view').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
 }
@@ -2915,7 +2928,7 @@ function renderUserAdmin(){
   html += '</div></div></div></div>';
 
   // Switch時間
-  const gameCfg = loadGameSettings();
+  const gameCfg = getGameSettings();
   const gKey    = 'vq_game_' + todayKey();
   let gd = {};
   try{ gd = JSON.parse(localStorage.getItem(gKey)||'{}'); }catch(e){}
