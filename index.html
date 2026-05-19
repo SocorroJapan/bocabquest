@@ -3773,8 +3773,12 @@ async function setupKvdb(){
           saveSyncConfig(cfg);
           await pushToCloud();
           updateSyncBtn();
-          show('✅ 設定完了！', true);
-          setTimeout(()=>renderAdmin(), 800);
+          show('✅ 設定完了！<br><br>' +
+            '📋 <b>バケットID（親のスマホでも必要）：</b><br>' +
+            '<span style="font-family:monospace;font-size:13px;background:#f0f6ff;padding:4px 8px;border-radius:6px;display:inline-block;margin-top:4px;user-select:all">' + bucketId + '</span><br>' +
+            '<span style="font-size:11px;color:#7a99cc">↑ このIDを親のスマホで管理者画面→学習レポートを見る、から入力してください</span>',
+            true);
+          setTimeout(()=>renderAdmin(), 3000);
           return;
         }
       }
@@ -3942,35 +3946,47 @@ function closeParentReport(){
 // JSONBinからデータを読み込んで学習レポートを表示（固定キー版）
 async function viewReportFixed(){
   const resEl = document.getElementById('view-result');
-  const show = (msg, ok) => {
-    if(!resEl) return;
-    resEl.style.cssText = 'font-size:12px;line-height:1.6;color:' + (ok ? '#15803d' : '#e11d48');
-    resEl.textContent = msg;
-  };
-  // バケットIDはどのデバイスでも同じlocalStorageから読む
+  if(!resEl) return;
   const cfg = getSyncConfig();
+
+  // bucketIdがない場合（親スマホ初回）→ 入力欄を表示
   if(!cfg.bucketId){
-    show('⚠️ まず子供のスマホで「☁️ クラウド設定」を完了してください', false);
+    resEl.innerHTML =
+      '<div style="font-size:12px;color:#a16207;margin-bottom:8px">⚠️ 子供のスマホで設定したIDを入力してください</div>' +
+      '<input id="parent-bucket-input" style="width:100%;padding:9px 10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;box-sizing:border-box;margin-bottom:8px" placeholder="子供のスマホのバケットID">' +
+      '<button onclick="saveParentBucketId()" style="width:100%;padding:11px;background:linear-gradient(135deg,#1b5e20,#2e7d32);border:none;border-radius:10px;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">保存して見る</button>';
     return;
   }
-  show('⏳ データを取得中...', true);
+
+  resEl.style.cssText = 'font-size:12px;line-height:1.6;color:#a16207';
+  resEl.textContent = '⏳ データを取得中...';
   try{
     const url = KVDB_BASE + '/' + cfg.bucketId + '/' + KVDB_KEY;
     const res = await fetch(url, { method: 'GET' });
     if(!res.ok){
-      show('❌ 取得失敗 (' + res.status + ') 子供のスマホで同期が完了しているか確認してください', false);
+      resEl.style.color = '#e11d48';
+      resEl.textContent = '❌ 取得失敗(' + res.status + ')';
       return;
     }
     const payload = await res.json();
-    if(resEl) resEl.textContent = '';
+    resEl.textContent = '';
     showCloudReport(payload);
   }catch(e){
-    if(!navigator.onLine){
-      show('❌ オフラインです。インターネット接続を確認してください', false);
-    } else {
-      show('❌ 通信エラー: ' + e.message, false);
-    }
+    resEl.style.color = '#e11d48';
+    resEl.textContent = navigator.onLine ? ('❌ 通信エラー: ' + e.message) : '❌ オフラインです';
   }
+}
+
+// 親スマホでバケットIDを保存してすぐ取得
+async function saveParentBucketId(){
+  const inp = document.getElementById('parent-bucket-input');
+  const id = inp ? inp.value.trim() : '';
+  if(!id){ alert('IDを入力してください'); return; }
+  const cfg = getSyncConfig();
+  cfg.bucketId = id;
+  saveSyncConfig(cfg);
+  updateSyncBtn();
+  viewReportFixed(); // すぐ取得実行
 }
 
 // 旧viewReport（互換性のため残す）
