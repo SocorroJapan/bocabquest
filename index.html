@@ -360,6 +360,27 @@ strong {
 .ds-ok{background:#dcfce7;color:#16a34a}
 .ds-ng{background:#ffe4e6;color:#e11d48}
 .ds-done{background:#fef9c3;color:#a16207}
+
+/* ══ 問題アップロード機能 ══ */
+.upload-section{margin-top:4px}
+.upload-textarea{width:100%;min-height:140px;padding:12px;border:2px solid #ddeeff;border-radius:12px;font-family:monospace;font-size:12px;color:#0d1b38;outline:none;resize:vertical;line-height:1.6;background:#f8fbff;box-sizing:border-box}
+.upload-textarea:focus{border-color:#2b72f5;background:#fff}
+.upload-btn{width:100%;padding:12px;background:linear-gradient(135deg,#0f2d5e,#2b72f5);border:none;border-radius:12px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px}
+.upload-result{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:12px;font-weight:700;line-height:1.6}
+.upload-result.ok{background:#f0fdf4;color:#15803d;border:1.5px solid #86efac}
+.upload-result.ng{background:#fff1f2;color:#be123c;border:1.5px solid #fca5a5}
+.custom-day-item{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#f8fbff;border-radius:8px;margin-bottom:5px;font-size:12px;font-weight:600;color:#0d1b38}
+.custom-day-del{background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:0 4px;line-height:1}
+.tab-row{display:flex;gap:6px;margin-bottom:12px}
+.tab-btn{flex:1;padding:8px;border:2px solid #ddeeff;border-radius:8px;background:#f8fbff;font-family:inherit;font-size:12px;font-weight:700;color:#3a5080;cursor:pointer}
+.tab-btn.active{background:#0f2d5e;color:#fff;border-color:#0f2d5e}
+.file-drop-area{border:2px dashed #90afd4;border-radius:12px;padding:20px;text-align:center;background:#f8fbff;cursor:pointer;transition:all .2s;margin-bottom:8px}
+.file-drop-area:hover,.file-drop-area.drag-over{border-color:#2b72f5;background:#eef5ff}
+.file-input-hidden{display:none}
+.add-method-toggle{display:flex;gap:8px;margin-bottom:12px}
+.method-btn{flex:1;padding:9px 6px;border:2px solid #ddeeff;border-radius:10px;background:#f8fbff;font-family:inherit;font-size:12px;font-weight:700;color:#3a5080;cursor:pointer;text-align:center}
+.method-btn.active{background:#0f2d5e;color:#fff;border-color:#0f2d5e}
+
 </style>
 </head>
 <body>
@@ -2444,7 +2465,7 @@ function renderQuiz(d){
   let syncNextBtn = '';
   if(allDone && ST.done[ST.cur]){
     const cfg = getSyncConfig();
-    const hasSyncCfg = !!(cfg.apiKey && cfg.binId);
+    const hasSyncCfg = !!(cfg.bucketId);
     const syncLabel = hasSyncCfg
       ? '☁️ 結果を同期して次の日へ'
       : '次の日へ →';
@@ -2592,19 +2613,16 @@ function retryDay(){
 // 同期して次の日へ進む
 async function syncAndNextDay(){
   const cfg = getSyncConfig();
-  const hasSyncCfg = !!(cfg.apiKey && cfg.binId);
+  const hasSyncCfg = !!(cfg.bucketId);
   const btn = document.querySelector('[onclick="syncAndNextDay()"]');
 
   if(hasSyncCfg){
-    // ボタンを「同期中」表示に
     if(btn){ btn.textContent = '⏳ 同期中...'; btn.disabled = true; }
     await pushToCloud();
-    // 同期完了フィードバック（一瞬表示）
     if(btn){ btn.textContent = '✅ 同期完了！'; }
     await new Promise(r => setTimeout(r, 600));
   }
 
-  // 次の日へ
   chDay(1);
 }
 
@@ -3258,7 +3276,70 @@ function renderAdmin(){
     '<button class="game-save-btn" onclick="saveGameSettingsFromAdmin()">💾 設定を保存する</button>' +
     '</div></div></div>';
 
+
+  // ── 問題追加セクション ──
+  const customDays = getCustomDays();
+  const allDaysNow = getAllDays();
+  html += '<div class="adm-section upload-section"><div class="adm-card">';
+  html += '<div class="adm-card-ttl">➕ 問題を追加する</div>';
+  html += '<div class="adm-card-body">';
+  html += '<div class="tab-row">';
+  html += '<button class="tab-btn active" id="utab-add" onclick="switchUploadTab(\'add\')">追加</button>';
+  html += '<button class="tab-btn" id="utab-list" onclick="switchUploadTab(\'list\')">追加済み（'+customDays.length+'件）</button>';
+  html += '<button class="tab-btn" id="utab-export" onclick="switchUploadTab(\'export\')">エクスポート</button>';
+  html += '</div>';
+  // 追加タブ
+  html += '<div id="upload-tab-add">';
+  html += '<div class="add-method-toggle">';
+  html += '<button class="method-btn active" id="method-file" onclick="switchAddMethod(\'file\')">📁 ファイル</button>';
+  html += '<button class="method-btn" id="method-text" onclick="switchAddMethod(\'text\')">✏️ テキスト</button>';
+  html += '</div>';
+  html += '<label style="font-size:12px;font-weight:700;color:#0d1b38;display:block;margin-bottom:5px">📍 挿入位置</label>';
+  html += '<select id="insert-pos-sel" style="width:100%;padding:10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;font-weight:600;color:#0d1b38;background:#f8fbff;outline:none;margin-bottom:10px">';
+  html += '<option value="'+(DAYS.length-1)+'">末尾に追加（Day'+(allDaysNow.length+1)+'以降）</option>';
+  DAYS.forEach((d,i)=>{ html += '<option value="'+i+'">Day'+(i+1)+' の後（'+(d.title||'')+'）</option>'; });
+  html += '<option value="-1">先頭に追加</option></select>';
+  // ファイル方式
+  html += '<div id="add-method-file">';
+  html += '<div class="file-drop-area" id="file-drop" onclick="document.getElementById(\'file-input\').click()" ondragover="event.preventDefault();this.classList.add(\'drag-over\')" ondragleave="this.classList.remove(\'drag-over\')" ondrop="handleFileDrop(event)">';
+  html += '<div style="font-size:28px;margin-bottom:4px">📄</div><div style="font-size:13px;font-weight:700;color:#3a5080">JSONファイルをタップして選択</div><div style="font-size:11px;color:#7a99cc;margin-top:4px" id="file-name"></div></div>';
+  html += '<input type="file" id="file-input" class="file-input-hidden" accept=".json" onchange="handleFileSelect(this)">';
+  html += '<button class="upload-btn" onclick="importFromFile()">📥 ファイルから追加する</button></div>';
+  // テキスト方式
+  html += '<div id="add-method-text" style="display:none">';
+  html += '<div id="upload-tmpl-disp" onclick="fillTemplate()" style="background:#f0f6ff;border-radius:10px;padding:10px;font-size:11px;color:#3a5080;line-height:1.7;margin-bottom:6px;font-family:monospace;white-space:pre-wrap;cursor:pointer;border:1.5px dashed #90afd4"></div>';
+  html += '<textarea class="upload-textarea" id="upload-json" placeholder="JSONを貼り付け"></textarea>';
+  html += '<button class="upload-btn" onclick="importCustomDays()">📥 テキストから追加する</button></div>';
+  html += '<div id="upload-result"></div></div>';
+  // 追加済みタブ
+  html += '<div id="upload-tab-list" style="display:none">';
+  if(customDays.length===0){ html += '<div style="color:#7a99cc;font-size:13px;padding:8px 0">追加された問題はありません</div>'; }
+  else { customDays.forEach((d,i)=>{
+    const words=d.words?d.words.map(w=>w.word).join('・'):(d.word||'');
+    const found=allDaysNow.find(x=>x._uid===d._uid);
+    const disp=found?found.day:'?';
+    html += '<div class="custom-day-item"><div style="flex:1;min-width:0"><div>Day'+disp+'：'+words+'</div>';
+    html += '<select style="font-size:11px;padding:3px 6px;border:1.5px solid #ddeeff;border-radius:6px;width:100%;margin-top:3px" onchange="moveCustomDay('+i+',this.value)">';
+    html += '<option value="'+DAYS.length+'">末尾</option>';
+    DAYS.forEach((sd,si)=>{ html += '<option value="'+si+'" '+(d.insertAfter===si?'selected':'')+'>Day'+(si+1)+' の後</option>'; });
+    html += '<option value="-1" '+(d.insertAfter===-1?'selected':'')+'>先頭</option></select></div>';
+    html += '<button class="custom-day-del" onclick="deleteCustomDay('+i+')" style="margin-left:8px;flex-shrink:0">🗑</button></div>';
+  }); }
+  html += '<button class="upload-btn" style="background:linear-gradient(135deg,#b91c1c,#ef4444);margin-top:10px" onclick="clearAllCustomDays()">🗑 全て削除</button></div>';
+  // エクスポートタブ
+  html += '<div id="upload-tab-export" style="display:none">';
+  const expData = customDays.length>0 ? JSON.stringify(customDays.map(d=>d.words||[d]).flat(),null,2) : '';
+  html += '<textarea class="upload-textarea" id="export-json" readonly style="background:#f0f6ff;min-height:100px">'+expData+'</textarea>';
+  html += '<button class="upload-btn" onclick="copyExportJson()">📋 コピーする</button></div>';
+  html += '</div></div></div>';
+
   document.getElementById('adm-body').innerHTML = html;
+  // ヘッダーを管理者向けに
+  const hdrIc2=document.getElementById('adm-hdr-ic');
+  const hdrTtl2=document.getElementById('adm-hdr-title');
+  if(hdrIc2)hdrIc2.textContent='📊';
+  if(hdrTtl2)hdrTtl2.textContent='管理画面';
+  requestAnimationFrame(initUploadTemplate);
 }
 
 // URL hash で管理画面を開く (#admin)
@@ -3428,7 +3509,7 @@ function renderReviewModal(){
       '<div style="font-size:14px;color:#7c3aed;margin-bottom:4px">正解: ' + corrects + ' / ' + q.length + ' 問</div>' +
       '<div style="font-size:12px;color:#a78bfa;margin-bottom:20px">長期記憶: ' + getLongTermCount() + ' 語</div>' +
       // 同期設定があれば「同期して閉じる」、なければ「閉じる」
-      (getSyncConfig().apiKey && getSyncConfig().binId
+      (getSyncConfig().bucketId
         ? '<button onclick="syncAndCloseReview()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0277bd,#2b72f5);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px" id="sync-close-btn">☁️ 結果を同期して閉じる</button>'
         : '') +
       '<button onclick="closeReviewModal()" style="width:100%;padding:12px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">閉じる</button>' +
@@ -3760,8 +3841,12 @@ async function setupKvdb(){
   for(let attempt = 1; attempt <= 3; attempt++){
     try{
       show('⏳ 接続中... (' + attempt + '/3回目)', true);
+      const formData = new URLSearchParams();
+      formData.append('email', 'vocabquest@noreply.com');
       const res = await fetch('https://kvdb.io/', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString(),
         signal: AbortSignal.timeout(8000)
       });
       if(res.ok){
@@ -3782,19 +3867,22 @@ async function setupKvdb(){
           return;
         }
       }
-    }catch(e){ /* 次の試行へ */ }
+    }catch(e){ console.warn('kvdb attempt '+attempt+':', e.message); }
     if(attempt < 3) await new Promise(r => setTimeout(r, 2000));
   }
 
-  // ② フォールバック: Bin IDを手動入力
-  show(
-    '⚠️ 自動設定に失敗しました。<br>' +
-    '<a href="https://kvdb.io" target="_blank" style="color:#2b72f5">kvdb.io</a> をブラウザで開き、<br>' +
-    '「Create a Bucket」でIDを取得して下に入力してください：<br>' +
-    '<input id="manual-bucket-id" style="margin-top:6px;width:100%;padding:8px;border:1.5px solid #ddeeff;border-radius:8px;font-size:12px;box-sizing:border-box" placeholder="例: abc123xyz">' +
-    '<button onclick="applyManualBucketId()" style="margin-top:6px;width:100%;padding:10px;background:#0f2d5e;border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">このIDで設定する</button>',
-    false
-  );
+  // ② フォールバック: 手動入力（Webページからも取得可能）
+  if(resEl){
+    resEl.style.cssText='font-size:12px;color:#a16207;line-height:1.8';
+    resEl.innerHTML =
+      '<b>⚠️ 自動設定に失敗しました</b><br><br>' +
+      '以下の手順でIDを取得してください：<br>' +
+      '1. ブラウザで <a href="https://kvdb.io" target="_blank" style="color:#2b72f5;font-weight:700">kvdb.io</a> を開く<br>' +
+      '2. メールアドレスを入力して「Create a free bucket」<br>' +
+      '3. 表示されたIDをコピーして下に貼り付け<br><br>' +
+      '<input id="manual-bucket-id" style="display:block;width:100%;padding:10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;box-sizing:border-box;margin-bottom:8px;font-family:monospace" placeholder="例: Fd55uogXyxYdnXJvnyN8Xo">' +
+      '<button onclick="applyManualBucketId()" style="width:100%;padding:12px;background:linear-gradient(135deg,#0f2d5e,#2b72f5);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">✅ このIDで設定する</button>';
+  }
 }
 
 // 手動入力でバケットID設定
@@ -3872,7 +3960,7 @@ function buildSyncPayload(){
   })();
   const doneDays = Object.values(ST.done || {}).filter(Boolean).length;
   const quizDays = allDays.filter(d => d.mode === 'quiz');
-  return {
+  const payload = {
     ver:    'vq1',
     ts:     Date.now(),
     cur:    ST.cur,
@@ -3883,12 +3971,17 @@ function buildSyncPayload(){
     game:   { min: gameMin },
     summary: {
       totalDays: quizDays.length,
-      doneDays:  doneDays,
-      words:     quizDays.map(d =>
-        d.words ? d.words.map(w => w.word) : [d.word || '']
-      ).flat()
+      doneDays:  doneDays
+      // wordsリストは除外（データサイズ削減）
     }
   };
+  // データサイズチェック（16KB上限）
+  const json = JSON.stringify(payload);
+  if(json.length > 14000){
+    // rsを圧縮（古いデータを削除）
+    payload.rs = {};
+  }
+  return payload;
 }
 
 // JSONBinにデータを送信
@@ -3898,7 +3991,7 @@ async function pushToCloud(){
   try{
     const res = await fetch(KVDB_BASE + '/' + cfg.bucketId + '/' + KVDB_KEY, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(buildSyncPayload())
     });
     if(res.ok){
@@ -3968,7 +4061,15 @@ async function viewReportFixed(){
       resEl.textContent = '❌ 取得失敗(' + res.status + ')';
       return;
     }
-    const payload = await res.json();
+    // kvdb.ioはtext/plainで返す場合があるため両方対応
+    let payload;
+    const text = await res.text();
+    try{ payload = JSON.parse(text); }
+    catch(e){
+      resEl.style.color='#e11d48';
+      resEl.textContent='❌ データ解析エラー: '+e.message+' / 受信: '+text.slice(0,50);
+      return;
+    }
     resEl.textContent = '';
     showCloudReport(payload);
   }catch(e){
@@ -4106,6 +4207,207 @@ function showCloudReport(p){
 
   overlay.innerHTML = html;
   document.body.appendChild(overlay);
+}
+
+
+// ══════════════════════════════════════════════════════
+// 📥 カスタム問題管理
+// ══════════════════════════════════════════════════════
+const CUSTOM_DAYS_KEY = 'vq_custom_days';
+
+function getCustomDays(){
+  try{ return JSON.parse(localStorage.getItem(CUSTOM_DAYS_KEY)||'[]'); }
+  catch(e){ return []; }
+}
+function saveCustomDays(days){
+  try{ localStorage.setItem(CUSTOM_DAYS_KEY, JSON.stringify(days)); }catch(e){}
+}
+
+// 全DAYSを取得（静的DAYS＋カスタム、挿入位置でソート）
+function getAllDays(){
+  const custom = getCustomDays();
+  if(!custom.length) return DAYS;
+  const result = [];
+  const sorted = [...custom].sort((a,b)=>{
+    const ai = a.insertAfter!==undefined ? a.insertAfter : DAYS.length;
+    const bi = b.insertAfter!==undefined ? b.insertAfter : DAYS.length;
+    return ai-bi;
+  });
+  for(let si=0; si<=DAYS.length; si++){
+    sorted.forEach(cd=>{
+      const ins = cd.insertAfter!==undefined ? cd.insertAfter : DAYS.length;
+      if(si===0 && ins<0) result.push(cd);
+      else if(ins===si-1) result.push(cd);
+    });
+    if(si<DAYS.length) result.push(DAYS[si]);
+  }
+  sorted.forEach(cd=>{
+    const ins = cd.insertAfter!==undefined ? cd.insertAfter : DAYS.length;
+    if(ins>=DAYS.length && !result.includes(cd)) result.push(cd);
+  });
+  return result.map((d,i)=>({...d, day:i+1, label:'Day '+(i+1)}));
+}
+
+// バリデーション
+function validateAndNormalize(raw){
+  if(!Array.isArray(raw)) throw new Error('配列（[...]）で入力してください');
+  return raw.map((item,idx)=>{
+    if(!item.word)      throw new Error('item['+idx+']: wordが必要です');
+    if(!item.ruby)      throw new Error('item['+idx+']: rubyが必要です');
+    if(!item.q)         throw new Error('item['+idx+']: qが必要です');
+    if(!Array.isArray(item.opts)||item.opts.length!==3) throw new Error('item['+idx+']: optsは3要素の配列');
+    if(item.ok===undefined||item.ok<0||item.ok>2) throw new Error('item['+idx+']: okは0・1・2');
+    if(!item.mean)      throw new Error('item['+idx+']: meanが必要です');
+    if(!Array.isArray(item.exs)||item.exs.length!==2) throw new Error('item['+idx+']: exsは2要素の配列');
+    const autoS=(t,w)=>t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),'<strong>'+w+'</strong>');
+    return { word:item.word, ruby:item.ruby, q:item.q, opts:item.opts.map(o=>autoS(o,item.word)), ok:Number(item.ok), mean:item.mean, exs:item.exs.map(e=>autoS(e,item.word)) };
+  });
+}
+
+// JSON共通処理
+function processJsonText(txt, insertAfter){
+  if(insertAfter===undefined) insertAfter=DAYS.length-1;
+  let raw;
+  try{ raw=JSON.parse(txt); }
+  catch(e){ showUploadResult('❌ JSON形式が正しくありません: '+e.message,false); return; }
+  let words;
+  try{ words=validateAndNormalize(raw); }
+  catch(e){ showUploadResult('❌ データエラー: '+e.message,false); return; }
+  const existing=getCustomDays();
+  const newDays=[];
+  for(let i=0;i<words.length;i+=3){
+    const group=words.slice(i,Math.min(i+3,words.length));
+    newDays.push({
+      _uid: Date.now()+i, day:9999, label:'Day ?', wd:'追', mode:'quiz', modeLabel:'📝 使い方クイズ',
+      title:'「'+group.map(g=>g.word).join('・')+'」', tagline:'この言葉の使い方、わかる？',
+      insertAfter: insertAfter+Math.floor(i/3),
+      words: group.map(g=>({word:g.word,ruby:g.ruby,q:g.q,opts:g.opts,ok:g.ok,mean:g.mean,exs:g.exs})),
+      bonus:[]
+    });
+  }
+  saveCustomDays([...existing,...newDays]);
+  const allD=getAllDays();
+  const nums=newDays.map(nd=>{ const f=allD.find(d=>d._uid===nd._uid); return f?f.day:'?'; });
+  showUploadResult('✅ '+words.length+'語・'+newDays.length+'Day分を追加！ Day'+nums[0]+(nums.length>1?'〜Day'+nums[nums.length-1]:'')+'として挿入',true);
+  renderAdmin(); render();
+}
+
+function showUploadResult(msg,ok){
+  const el=document.getElementById('upload-result');
+  if(!el)return;
+  el.className='upload-result '+(ok?'ok':'ng');
+  el.textContent=msg;
+}
+
+// テキストから追加
+function importCustomDays(){
+  const txt=(document.getElementById('upload-json')||{}).value||'';
+  if(!txt.trim()){ showUploadResult('⚠️ JSONを入力してください',false); return; }
+  const sel=document.getElementById('insert-pos-sel');
+  const pos=sel?parseInt(sel.value):DAYS.length-1;
+  processJsonText(txt.trim(),pos);
+  const el=document.getElementById('upload-json');
+  if(el)el.value='';
+}
+
+// ファイル関連
+let _pendingFileText=null;
+function handleFileSelect(input){
+  const file=input.files[0]; if(!file)return;
+  readJsonFile(file);
+}
+function handleFileDrop(event){
+  event.preventDefault();
+  const el=document.getElementById('file-drop');
+  if(el)el.classList.remove('drag-over');
+  readJsonFile(event.dataTransfer.files[0]);
+}
+function readJsonFile(file){
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    _pendingFileText=e.target.result;
+    const nm=document.getElementById('file-name');
+    if(nm)nm.textContent='✅ '+file.name;
+    showUploadResult('✅ 読み込み完了。「ファイルから追加する」を押してください',true);
+  };
+  r.readAsText(file,'UTF-8');
+}
+function importFromFile(){
+  if(!_pendingFileText){ showUploadResult('⚠️ ファイルを選択してください',false); return; }
+  const sel=document.getElementById('insert-pos-sel');
+  const pos=sel?parseInt(sel.value):DAYS.length-1;
+  processJsonText(_pendingFileText,pos);
+  _pendingFileText=null;
+  const nm=document.getElementById('file-name');
+  if(nm)nm.textContent='';
+}
+
+// タブ切替
+function switchUploadTab(tab){
+  ['add','list','export'].forEach(t=>{
+    const el=document.getElementById('upload-tab-'+t);
+    const btn=document.getElementById('utab-'+t);
+    if(el)el.style.display=t===tab?'':'none';
+    if(btn)btn.className='tab-btn'+(t===tab?' active':'');
+  });
+}
+function switchAddMethod(m){
+  ['file','text'].forEach(x=>{
+    const el=document.getElementById('add-method-'+x);
+    const btn=document.getElementById('method-'+x);
+    if(el)el.style.display=x===m?'':'none';
+    if(btn)btn.className='method-btn'+(x===m?' active':'');
+  });
+}
+function deleteCustomDay(idx){
+  if(!confirm('このDayを削除しますか？'))return;
+  const days=getCustomDays(); days.splice(idx,1);
+  const base=DAYS.length;
+  days.forEach((d,i)=>{ d.day=base+i+1; d.label='Day '+(base+i+1); });
+  saveCustomDays(days); renderAdmin(); render();
+}
+function moveCustomDay(idx,newPos){
+  const days=getCustomDays(); if(!days[idx])return;
+  days[idx].insertAfter=parseInt(newPos);
+  saveCustomDays(days); renderAdmin(); render();
+}
+function clearAllCustomDays(){
+  if(!confirm('追加した問題をすべて削除しますか？'))return;
+  saveCustomDays([]); renderAdmin(); render();
+}
+function copyExportJson(){
+  const el=document.getElementById('export-json');
+  if(!el)return;
+  navigator.clipboard.writeText(el.value).then(()=>alert('コピーしました！')).catch(()=>{
+    el.select(); document.execCommand('copy'); alert('コピーしました！');
+  });
+}
+
+const UPLOAD_TEMPLATE = `[
+  {
+    "word": "逡巡",
+    "ruby": "しゅんじゅん",
+    "q": "「逡巡」の正しい使い方はどれ？",
+    "opts": [
+      "迷ってぐずぐずして、なかなか決断できないこと",
+      "一度決めたことに自信を持って突き進むこと",
+      "相手の意見をすぐに受け入れること"
+    ],
+    "ok": 0,
+    "mean": "逡巡＝迷ってぐずぐずすること。",
+    "exs": ["何度も逡巡した末に、返事をした", "逡巡せず行動できる人は強い"]
+  }
+]`;
+
+function fillTemplate(){
+  const el=document.getElementById('upload-json');
+  if(el){el.value=UPLOAD_TEMPLATE;el.focus();}
+}
+
+function initUploadTemplate(){
+  const el=document.getElementById('upload-tmpl-disp');
+  if(el)el.textContent=UPLOAD_TEMPLATE;
 }
 
 // ══════════════════════════════════════════════════════
