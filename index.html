@@ -2995,8 +2995,12 @@ function renderUserAdmin(){
   // 固定設定済みなのでシンプルに同期ボタンのみ表示
   html += '<p style="font-size:12px;color:#3a5080;line-height:1.6;margin-bottom:10px">';
   html += '学習が終わったら「今すぐ同期」を押すと、<br>保護者のスマホから学習状況が確認できます。</p>';
-  html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:10px">最終同期: '+(syncCfg.lastSync?new Date(syncCfg.lastSync).toLocaleString('ja-JP'):'まだ同期していません')+'</p>';
-  html += '<button class="game-save-btn" style="margin-top:0" onclick="manualSync()">☁️ 今すぐ同期する</button>';
+  if(syncCfg.bucketId){
+    html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:10px">最終同期: '+(syncCfg.lastSync?new Date(syncCfg.lastSync).toLocaleString('ja-JP'):'まだ同期していません')+'</p>';
+    html += '<button class="game-save-btn" style="margin-top:0" onclick="manualSync()">☁️ 今すぐ同期する</button>';
+  } else {
+    html += '<div style="background:#fef9c3;border-radius:10px;padding:10px 12px;font-size:12px;color:#a16207;font-weight:700;margin-bottom:8px">⚠️ 未設定 ― 管理者ログインから初回設定が必要です</div>';
+  }
   html += '<div id="usr-sync-result" style="margin-top:8px;font-size:12px"></div>';
   html += '</div></div></div>';
 
@@ -3011,6 +3015,8 @@ function renderUserAdmin(){
 
 // ユーザー画面から同期初期化
 async function userInitSync(){
+  // 固定設定済みのため使用しない
+  return;
   const apiKey = (document.getElementById('usr-api-key')||{}).value?.trim();
   const resEl  = document.getElementById('usr-sync-result');
   if(!apiKey){ if(resEl){resEl.style.color='#e11d48';resEl.textContent='⚠️ APIキーを入力してください';} return; }
@@ -3199,27 +3205,17 @@ function renderAdmin(){
     '<div class="adm-card-ttl">☁️ クラウド同期（保護者閲覧用）</div>' +
     '<div class="adm-card-body">' +
     '<p style="font-size:12px;color:#3a5080;line-height:1.7;margin-bottom:10px">' +
-      '息子のスマホの学習データをクラウドに保存し、<br>' +
-      '保護者が別のスマホから閲覧できます。<br>' +
-      '📌 <b>JSONBin.io</b>（無料）を使用します。' +
+      '学習データをクラウドに保存します。<br>' +
+      '保護者が別のスマホから学習状況を確認できます。' +
     '</p>' +
-    '<div style="background:#f0f6ff;border-radius:10px;padding:10px 12px;font-size:11px;color:#3a5080;line-height:1.9;margin-bottom:12px">' +
-      '<b>初回設定手順：</b><br>' +
-      '1. <a href="https://jsonbin.io" target="_blank" style="color:#2b72f5">jsonbin.io</a> でアカウント作成（無料）<br>' +
-      '2. ログイン後「API Keys」からMaster Keyをコピー<br>' +
-      '3. 下の「APIキー」欄に貼り付けて「同期開始」<br>' +
-      '4. Bin IDが自動生成されます（保護者に伝える）<br>' +
-      '5. 保護者は管理画面でAPIキー+Bin IDを入力→閲覧' +
-    '</div>' +
-    '<label style="font-size:12px;font-weight:700;color:#0d1b38">JSONBin APIキー</label>' +
-    '<input class="sync-input" id="sync-api-key" type="password" placeholder="$2a$10$..." value="' + (syncCfg.apiKey||'') + '">' +
-    '<label style="font-size:12px;font-weight:700;color:#0d1b38;display:block;margin-top:8px">Bin ID（自動生成後に表示）</label>' +
-    '<input class="sync-input" id="sync-bin-id" placeholder="未設定" value="' + (syncCfg.binId||'') + '" readonly style="color:#7a99cc">' +
-    '<div style="display:flex;gap:6px;margin-top:10px">' +
-      '<button class="game-save-btn" style="margin-top:0" onclick="initSync()">🚀 同期開始</button>' +
-      (syncCfg.binId ? '<button class="game-save-btn" style="margin-top:0;background:linear-gradient(135deg,#0277bd,#0288d1)" onclick="manualSync()">☁️ 今すぐ同期</button>' : '') +
-    '</div>' +
-    (syncCfg.binId ? '<div style="margin-top:8px;font-size:11px;color:#7a99cc">最終同期: <span id="last-sync-time">' + (syncCfg.lastSync ? new Date(syncCfg.lastSync).toLocaleString('ja-JP') : '未同期') + '</span></div>' : '') +
+    (syncCfg.bucketId
+      ? '<div style="background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12px;color:#15803d;font-weight:700;margin-bottom:8px">✅ 設定済み（自動同期が有効です）</div>' +
+        '<div style="margin-bottom:8px;font-size:11px;color:#7a99cc">最終同期: <span id="last-sync-time">' + (syncCfg.lastSync ? new Date(syncCfg.lastSync).toLocaleString('ja-JP') : '未同期') + '</span></div>' +
+        '<button class="game-save-btn" style="margin-top:0;background:linear-gradient(135deg,#0277bd,#0288d1)" onclick="manualSync()">☁️ 今すぐ同期</button>'
+      : '<div style="background:#fef9c3;border-radius:10px;padding:10px 12px;font-size:12px;color:#a16207;font-weight:700;margin-bottom:10px">⚠️ 未設定 ― 下のボタンで初回設定してください</div>' +
+        '<button class="game-save-btn" onclick="setupKvdb()">🚀 クラウド設定（初回のみ）</button>' +
+        '<div id="kvdb-setup-result" style="margin-top:8px;font-size:12px"></div>'
+    ) +
     '<hr style="margin:14px 0;border:none;border-top:1px solid #f0f6ff">' +
     '<p style="font-size:12px;font-weight:700;color:#0d1b38;margin-bottom:6px">🔍 子供の学習レポートを見る</p>' +
     '<p style="font-size:11px;color:#7a99cc;margin-bottom:8px">子供がアップロードした最新データを表示します</p>' +
@@ -3721,33 +3717,24 @@ const _origCloseReview = closeReviewModal;
 // ══════════════════════════════════════════════════════
 
 const SYNC_CFG_KEY = 'vq_sync_cfg';
-const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
-// ── 固定のクラウド設定 ──
-const FIXED_API_KEY = '$2a$10$ZOt9s5J/gBSN/2Ys39.M4.pPN3l6jGnIkFfBkUk1kpGu8xYQyBvXC';
-const FIXED_BIN_ID  = '6a0a7d32adc21f119ab72583';
+const KVDB_BASE = 'https://kvdb.io';
+// ── kvdb.io設定（登録不要・無料） ──
+const KVDB_KEY  = 'vq_latest'; // バケット内のキー名（固定）
+
 
 function getSyncConfig(){
   try{
-    const stored = JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}');
-    // 常にFIXED値を使う（localStorageの値を無視）
-    stored.apiKey = FIXED_API_KEY;
-    stored.binId  = FIXED_BIN_ID;
-    return stored;
-  } catch(e){
-    return { apiKey: FIXED_API_KEY, binId: FIXED_BIN_ID };
-  }
+    return JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}');
+  } catch(e){ return {}; }
 }
 function saveSyncConfig(cfg){
   try{ localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
 }
 
-// 固定設定を自動的にlocalStorageに保存（初回のみ）
+// kvdb.ioのバケットIDが設定済みか確認
 function applyFixedSyncConfig(){
-  // 常にFIXED値で強制上書き（initSyncで別のBinが作られても戻す）
-  const cfg = getSyncConfig();
-  cfg.apiKey = FIXED_API_KEY;
-  cfg.binId  = FIXED_BIN_ID;
-  saveSyncConfig(cfg);
+  // kvdb.ioはバケットIDのみ管理（APIキー不要）
+  // バケットIDはlocalStorageに保存
 }
 
 // 同期ボタンの表示制御
@@ -3755,11 +3742,39 @@ function updateSyncBtn(){
   const btn = document.getElementById('sync-btn');
   if(!btn) return;
   const cfg = getSyncConfig();
-  btn.style.display = (cfg.apiKey && cfg.binId) ? 'inline-flex' : 'none';
+  btn.style.display = cfg.bucketId ? 'inline-flex' : 'none';
 }
 
 // 初回同期：Binを作成してBin IDを取得
+// kvdb.io バケット初回作成
+async function setupKvdb(){
+  const resEl = document.getElementById('kvdb-setup-result');
+  const show = (msg, ok) => {
+    if(!resEl) return;
+    resEl.style.cssText='font-size:12px;color:'+(ok?'#15803d':'#e11d48');
+    resEl.textContent=msg;
+  };
+  show('⏳ バケット作成中...', true);
+  try{
+    const res = await fetch(KVDB_BASE + '/', { method: 'POST' });
+    if(!res.ok){ show('❌ 作成失敗 (' + res.status + ')', false); return; }
+    const bucketId = (await res.text()).trim();
+    if(!bucketId || bucketId.length < 5){ show('❌ バケットID取得失敗', false); return; }
+    const cfg = getSyncConfig();
+    cfg.bucketId = bucketId;
+    saveSyncConfig(cfg);
+    await pushToCloud();
+    updateSyncBtn();
+    show('✅ 設定完了！', true);
+    setTimeout(()=>renderAdmin(), 1000);
+  }catch(e){
+    show('❌ エラー: ' + e.message, false);
+  }
+}
+
 async function initSync(){
+  // 固定設定済みのため使用しない
+  alert("設定済みです。このボタンは使用不要です。"); return;
   const apiKey = (document.getElementById('sync-api-key')||{}).value?.trim();
   if(!apiKey){
     alert('APIキーを入力してください');
@@ -3838,14 +3853,11 @@ function buildSyncPayload(){
 // JSONBinにデータを送信
 async function pushToCloud(){
   const cfg = getSyncConfig();
-  if(!cfg.apiKey || !cfg.binId) return;
+  if(!cfg.bucketId) return;
   try{
-    const res = await fetch(JSONBIN_BASE + '/b/' + cfg.binId, {
+    const res = await fetch(KVDB_BASE + '/' + cfg.bucketId + '/' + KVDB_KEY, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': cfg.apiKey
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildSyncPayload())
     });
     if(res.ok){
@@ -3854,7 +3866,9 @@ async function pushToCloud(){
       const el = document.getElementById('last-sync-time');
       if(el) el.textContent = new Date(cfg.lastSync).toLocaleString('ja-JP');
     }
-  }catch(e){ /* サイレントに失敗 */ }
+  }catch(e){
+    console.warn('pushToCloud failed:', e.message);
+  }
 }
 
 // 手動同期
@@ -3891,21 +3905,34 @@ function closeParentReport(){
 // JSONBinからデータを読み込んで学習レポートを表示（固定キー版）
 async function viewReportFixed(){
   const resEl = document.getElementById('view-result');
-  if(resEl){ resEl.style.cssText='color:#a16207;font-size:12px'; resEl.textContent='⏳ データを取得中...'; }
+  const show = (msg, ok) => {
+    if(!resEl) return;
+    resEl.style.cssText = 'font-size:12px;line-height:1.6;color:' + (ok ? '#15803d' : '#e11d48');
+    resEl.textContent = msg;
+  };
+  // バケットIDはどのデバイスでも同じlocalStorageから読む
+  const cfg = getSyncConfig();
+  if(!cfg.bucketId){
+    show('⚠️ まず子供のスマホで「☁️ クラウド設定」を完了してください', false);
+    return;
+  }
+  show('⏳ データを取得中...', true);
   try{
-    const res = await fetch(JSONBIN_BASE + '/b/' + FIXED_BIN_ID + '/latest', {
-      headers: { 'X-Master-Key': FIXED_API_KEY, 'X-Bin-Meta': 'false' }
-    });
+    const url = KVDB_BASE + '/' + cfg.bucketId + '/' + KVDB_KEY;
+    const res = await fetch(url, { method: 'GET' });
     if(!res.ok){
-      const err = await res.json().catch(()=>({}));
-      if(resEl){ resEl.style.cssText='color:#e11d48;font-size:12px'; resEl.textContent='❌ 取得失敗: ' + (err.message||res.status); }
+      show('❌ 取得失敗 (' + res.status + ') 子供のスマホで同期が完了しているか確認してください', false);
       return;
     }
     const payload = await res.json();
     if(resEl) resEl.textContent = '';
     showCloudReport(payload);
   }catch(e){
-    if(resEl){ resEl.style.cssText='color:#e11d48;font-size:12px'; resEl.textContent='❌ エラー: ' + e.message; }
+    if(!navigator.onLine){
+      show('❌ オフラインです。インターネット接続を確認してください', false);
+    } else {
+      show('❌ 通信エラー: ' + e.message, false);
+    }
   }
 }
 
