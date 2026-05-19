@@ -2440,7 +2440,29 @@ function renderQuiz(d){
   // ボーナスワード（全問完了後のみ表示）
   const bonusHtml = allDone ? renderBonus(d.bonus) : '';
 
-  return stepIndicator + quizPart + feedback + explain + bonusHtml;
+  // 全問完了済み（ST.done済み）のDayにいる時：同期ボタンを表示
+  let syncNextBtn = '';
+  if(allDone && ST.done[ST.cur]){
+    const cfg = getSyncConfig();
+    const hasSyncCfg = !!(cfg.apiKey && cfg.binId);
+    const syncLabel = hasSyncCfg
+      ? '☁️ 結果を同期して次の日へ'
+      : '次の日へ →';
+    const nextDayIdx = ST.cur + 1;
+    const hasNext = nextDayIdx < (typeof getAllDays==='function' ? getAllDays() : DAYS).length;
+    if(hasNext){
+      syncNextBtn = '<button onclick="syncAndNextDay()" style="' +
+        'margin-top:14px;width:100%;padding:14px;' +
+        'background:linear-gradient(135deg,#0277bd,#2b72f5);' +
+        'border:none;border-radius:14px;color:#fff;' +
+        'font-family:inherit;font-size:15px;font-weight:800;' +
+        'cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;' +
+        'box-shadow:0 4px 16px rgba(2,119,189,.35)">' +
+        syncLabel + '</button>';
+    }
+  }
+
+  return stepIndicator + quizPart + feedback + explain + bonusHtml + syncNextBtn;
 }
 
 function ansQ(i, wordIdx){
@@ -2567,6 +2589,25 @@ function retryDay(){
   delete ST.ans[ST.cur]; delete ST.done[ST.cur]; svST(); render();
   document.getElementById('main').scrollIntoView({behavior:'smooth',block:'start'});
 }
+// 同期して次の日へ進む
+async function syncAndNextDay(){
+  const cfg = getSyncConfig();
+  const hasSyncCfg = !!(cfg.apiKey && cfg.binId);
+  const btn = document.querySelector('[onclick="syncAndNextDay()"]');
+
+  if(hasSyncCfg){
+    // ボタンを「同期中」表示に
+    if(btn){ btn.textContent = '⏳ 同期中...'; btn.disabled = true; }
+    await pushToCloud();
+    // 同期完了フィードバック（一瞬表示）
+    if(btn){ btn.textContent = '✅ 同期完了！'; }
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  // 次の日へ
+  chDay(1);
+}
+
 function goNextWord(nextIdx){
   // 解説表示をリセット → renderQuizが自動で次の未回答問題を出題する
   if(!ST.showing) ST.showing = {};
@@ -3390,7 +3431,11 @@ function renderReviewModal(){
       '<div style="font-size:18px;font-weight:900;color:#4c1d95;margin-bottom:8px">レビュー完了！</div>' +
       '<div style="font-size:14px;color:#7c3aed;margin-bottom:4px">正解: ' + corrects + ' / ' + q.length + ' 問</div>' +
       '<div style="font-size:12px;color:#a78bfa;margin-bottom:20px">長期記憶: ' + getLongTermCount() + ' 語</div>' +
-      '<button onclick="closeReviewModal()" style="padding:12px 28px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">閉じる</button>' +
+      // 同期設定があれば「同期して閉じる」、なければ「閉じる」
+      (getSyncConfig().apiKey && getSyncConfig().binId
+        ? '<button onclick="syncAndCloseReview()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0277bd,#2b72f5);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px" id="sync-close-btn">☁️ 結果を同期して閉じる</button>'
+        : '') +
+      '<button onclick="closeReviewModal()" style="width:100%;padding:12px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">閉じる</button>' +
       '</div>';
     return;
   }
@@ -3459,6 +3504,16 @@ function ansReview(qIdx, optIdx){
 function nextReview(){
   reviewSession.current++;
   renderReviewModal();
+}
+
+// 復習：同期して閉じる
+async function syncAndCloseReview(){
+  const btn = document.getElementById('sync-close-btn');
+  if(btn){ btn.textContent = '⏳ 同期中...'; btn.disabled = true; }
+  await pushToCloud();
+  if(btn){ btn.textContent = '✅ 同期完了！'; }
+  await new Promise(r => setTimeout(r, 600));
+  closeReviewModal();
 }
 
 function closeReviewModal(){
