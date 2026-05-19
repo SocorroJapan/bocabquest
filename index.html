@@ -3729,9 +3729,9 @@ const FIXED_BIN_ID  = '6a0a7d32adc21f119ab72583';
 function getSyncConfig(){
   try{
     const stored = JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}');
-    // 未設定なら固定値を使う
-    if(!stored.apiKey) stored.apiKey = FIXED_API_KEY;
-    if(!stored.binId)  stored.binId  = FIXED_BIN_ID;
+    // 常にFIXED値を使う（localStorageの値を無視）
+    stored.apiKey = FIXED_API_KEY;
+    stored.binId  = FIXED_BIN_ID;
     return stored;
   } catch(e){
     return { apiKey: FIXED_API_KEY, binId: FIXED_BIN_ID };
@@ -3743,12 +3743,11 @@ function saveSyncConfig(cfg){
 
 // 固定設定を自動的にlocalStorageに保存（初回のみ）
 function applyFixedSyncConfig(){
+  // 常にFIXED値で強制上書き（initSyncで別のBinが作られても戻す）
   const cfg = getSyncConfig();
-  if(!cfg.apiKey || cfg.apiKey !== FIXED_API_KEY || !cfg.binId || cfg.binId !== FIXED_BIN_ID){
-    cfg.apiKey = FIXED_API_KEY;
-    cfg.binId  = FIXED_BIN_ID;
-    saveSyncConfig(cfg);
-  }
+  cfg.apiKey = FIXED_API_KEY;
+  cfg.binId  = FIXED_BIN_ID;
+  saveSyncConfig(cfg);
 }
 
 // 同期ボタンの表示制御
