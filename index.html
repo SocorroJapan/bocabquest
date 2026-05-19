@@ -3746,30 +3746,67 @@ function updateSyncBtn(){
 }
 
 // 初回同期：Binを作成してBin IDを取得
-// kvdb.io バケット初回作成
+// クラウド同期 初回設定（複数サービス順番に試行）
 async function setupKvdb(){
   const resEl = document.getElementById('kvdb-setup-result');
   const show = (msg, ok) => {
     if(!resEl) return;
-    resEl.style.cssText='font-size:12px;color:'+(ok?'#15803d':'#e11d48');
-    resEl.textContent=msg;
+    resEl.style.cssText = 'font-size:12px;line-height:1.6;color:' + (ok ? '#15803d' : '#e11d48');
+    resEl.innerHTML = msg;
   };
-  show('⏳ バケット作成中...', true);
-  try{
-    const res = await fetch(KVDB_BASE + '/', { method: 'POST' });
-    if(!res.ok){ show('❌ 作成失敗 (' + res.status + ')', false); return; }
-    const bucketId = (await res.text()).trim();
-    if(!bucketId || bucketId.length < 5){ show('❌ バケットID取得失敗', false); return; }
-    const cfg = getSyncConfig();
-    cfg.bucketId = bucketId;
-    saveSyncConfig(cfg);
-    await pushToCloud();
-    updateSyncBtn();
-    show('✅ 設定完了！', true);
-    setTimeout(()=>renderAdmin(), 1000);
-  }catch(e){
-    show('❌ エラー: ' + e.message, false);
+  show('⏳ クラウド設定中...', true);
+
+  // ① まずkvdb.ioを試す（最大3回）
+  for(let attempt = 1; attempt <= 3; attempt++){
+    try{
+      show('⏳ 接続中... (' + attempt + '/3回目)', true);
+      const res = await fetch('https://kvdb.io/', {
+        method: 'POST',
+        signal: AbortSignal.timeout(8000)
+      });
+      if(res.ok){
+        const bucketId = (await res.text()).trim();
+        if(bucketId && bucketId.length >= 5){
+          const cfg = getSyncConfig();
+          cfg.bucketId = bucketId;
+          cfg.service = 'kvdb';
+          saveSyncConfig(cfg);
+          await pushToCloud();
+          updateSyncBtn();
+          show('✅ 設定完了！', true);
+          setTimeout(()=>renderAdmin(), 800);
+          return;
+        }
+      }
+    }catch(e){ /* 次の試行へ */ }
+    if(attempt < 3) await new Promise(r => setTimeout(r, 2000));
   }
+
+  // ② フォールバック: Bin IDを手動入力
+  show(
+    '⚠️ 自動設定に失敗しました。<br>' +
+    '<a href="https://kvdb.io" target="_blank" style="color:#2b72f5">kvdb.io</a> をブラウザで開き、<br>' +
+    '「Create a Bucket」でIDを取得して下に入力してください：<br>' +
+    '<input id="manual-bucket-id" style="margin-top:6px;width:100%;padding:8px;border:1.5px solid #ddeeff;border-radius:8px;font-size:12px;box-sizing:border-box" placeholder="例: abc123xyz">' +
+    '<button onclick="applyManualBucketId()" style="margin-top:6px;width:100%;padding:10px;background:#0f2d5e;border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">このIDで設定する</button>',
+    false
+  );
+}
+
+// 手動入力でバケットID設定
+async function applyManualBucketId(){
+  const inp = document.getElementById('manual-bucket-id');
+  const id = inp ? inp.value.trim() : '';
+  if(!id){ alert('IDを入力してください'); return; }
+  const cfg = getSyncConfig();
+  cfg.bucketId = id;
+  cfg.service = 'kvdb';
+  saveSyncConfig(cfg);
+  await pushToCloud();
+  updateSyncBtn();
+  const resEl = document.getElementById('kvdb-setup-result');
+  if(resEl){ resEl.style.color='#15803d'; resEl.textContent='✅ 設定完了！'; }
+  setTimeout(()=>renderAdmin(), 800);
 }
 
 async function initSync(){
