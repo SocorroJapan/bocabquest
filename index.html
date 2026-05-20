@@ -399,7 +399,7 @@ strong {
         <span id="rv-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:99px;align-items:center;justify-content:center;border:1.5px solid #fff;font-family:'Nunito',sans-serif"></span>
       </div>
       <button class="chat-btn" onclick="openChat()">💬</button>
-      <button class="chat-btn" id="share-btn" onclick="openShareModal()" title="学習状況を共有" style="background:linear-gradient(135deg,#0277bd,#0288d1)">📤</button>
+      <button class="chat-btn" id="sync-btn" onclick="manualSync()" title="クラウド同期" style="background:linear-gradient(135deg,#0277bd,#0288d1)">☁️</button>
       <button class="chat-btn" onclick="openAdmin()" title="管理画面" style="background:linear-gradient(135deg,#374151,#6b7280)">⚙️</button>
     </div>
   </div>
@@ -3872,9 +3872,10 @@ function applyFixedSyncConfig(){
 
 // 同期ボタンの表示制御
 function updateSyncBtn(){
-  const btn = document.getElementById('share-btn');
+  const btn = document.getElementById('sync-btn');
   if(!btn) return;
-  // share-btnは常に表示（共有ボタン）
+  const cfg = getSyncConfig();
+  btn.style.display = cfg.binId ? 'inline-flex' : 'none';
 }
 
 // 初回同期：Binを作成してBin IDを取得
@@ -3944,18 +3945,7 @@ async function setupJsonBin(){
   }
 }
 
-// manualSyncをJSONBin対応に（pushToCloud呼び出し）
-async function manualSync(){
-  const btn = document.getElementById('share-btn');
-  if(btn){ btn.textContent='⏳'; btn.disabled=true; }
-  await pushToCloud();
-  if(btn){ btn.textContent='📤'; btn.disabled=false; }
-  const cfg = getSyncConfig();
-  if(cfg.lastSync){
-    const el = document.getElementById('last-sync-time');
-    if(el) el.textContent = new Date(cfg.lastSync).toLocaleString('ja-JP');
-  }
-}
+
 
 async function setupKvdb(){ setupJsonBin(); } // 互換性
 
@@ -4150,7 +4140,10 @@ async function manualSync(){
   await pushToCloud();
   if(btn){ btn.textContent = '☁️'; btn.disabled = false; }
   const cfg = getSyncConfig();
-  if(cfg.lastSync) alert('✅ 同期完了: ' + new Date(cfg.lastSync).toLocaleString('ja-JP'));
+  if(cfg.lastSync){
+    const el = document.getElementById('last-sync-time');
+    if(el) el.textContent = new Date(cfg.lastSync).toLocaleString('ja-JP');
+  }
 }
 
 // 自動同期（学習完了時・回答時に呼ぶ）
@@ -4737,20 +4730,6 @@ function checkReportMode(){
   return true;
 }
 
-// 「今すぐ同期」は共有URLモーダルを開くだけに変更
-function manualSync(){
-  openShareModal();
-}
-function scheduleSync(){ /* 不要 */ }
-function pushToCloud(){ return Promise.resolve(); }
-function updateSyncBtn(){
-  const btn = document.getElementById('share-btn');
-  // share-btnは常に表示
-}
-function startAutoSync(){ /* 不要 */ }
-function applyFixedSyncConfig(){ /* 不要 */ }
-function getSyncConfig(){ return {}; }
-function saveSyncConfig(cfg){ /* 不要 */ }
 
 // ══════════════════════════════════════════════════════
 // INIT
