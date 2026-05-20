@@ -3887,6 +3887,15 @@ async function setupJsonBin(){
     cfg.lastSync = Date.now();
     saveSyncConfig(cfg);
     updateSyncBtn();
+
+    // 成功メッセージを表示してから画面更新
+    // renderAdmin()を先に呼ぶとresElが消えるため、alertで通知してから更新
+    alert(
+      '✅ クラウド設定が完了しました！\n\n' +
+      '📋 Bin ID:\n' + binId + '\n\n' +
+      'このBin IDを保護者に伝えてください。\n' +
+      '（管理画面にも表示されます）'
+    );
     renderAdmin();
   }catch(e){
     show('❌ 通信エラー: ' + e.message, '#e11d48');
