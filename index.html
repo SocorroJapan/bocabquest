@@ -2476,8 +2476,8 @@ function renderQuiz(d){
   let syncNextBtn = '';
   if(allDone && ST.done[ST.cur]){
     const cfg = getSyncConfig();
-    const hasSyncCfg = !!(cfg.bucketId);
-    const syncLabel = '次の日へ →';
+    const hasSyncCfg = !!(cfg.binId);
+    const syncLabel = cfg.binId ? '☁️ 結果を同期して次の日へ' : '次の日へ →';
     const nextDayIdx = ST.cur + 1;
     const hasNext = nextDayIdx < (typeof getAllDays==='function' ? getAllDays() : DAYS).length;
     if(hasNext){
@@ -2621,7 +2621,14 @@ function retryDay(){
 }
 // 同期して次の日へ進む
 async function syncAndNextDay(){
-  // 共有URLを生成してからday移動
+  const cfg = getSyncConfig();
+  const btn = document.querySelector('[onclick="syncAndNextDay()"]');
+  if(cfg.binId){
+    if(btn){ btn.textContent='⏳ 同期中...'; btn.disabled=true; }
+    await pushToCloud();
+    if(btn){ btn.textContent='✅ 同期完了！'; }
+    await new Promise(r=>setTimeout(r,700));
+  }
   chDay(1);
 }
 
@@ -3512,7 +3519,10 @@ function renderReviewModal(){
       '<div style="font-size:14px;color:#7c3aed;margin-bottom:4px">正解: ' + corrects + ' / ' + q.length + ' 問</div>' +
       '<div style="font-size:12px;color:#a78bfa;margin-bottom:20px">長期記憶: ' + getLongTermCount() + ' 語</div>' +
       // 同期設定があれば「同期して閉じる」、なければ「閉じる」
-      
+      // 同期設定があれば「同期して閉じる」ボタンを表示
+      (getSyncConfig().binId
+        ? '<button onclick="syncAndCloseReview()" id="sync-close-btn" style="width:100%;padding:13px;background:linear-gradient(135deg,#0277bd,#2b72f5);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:10px">☁️ 結果を同期して閉じる</button>'
+        : '') +
       '<button onclick="closeReviewModal()" style="width:100%;padding:12px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">閉じる</button>' +
       '</div>';
     return;
@@ -3586,6 +3596,14 @@ function nextReview(){
 
 // 復習：同期して閉じる
 async function syncAndCloseReview(){
+  const cfg = getSyncConfig();
+  const btn = document.getElementById('sync-close-btn');
+  if(cfg.binId){
+    if(btn){ btn.textContent='⏳ 同期中...'; btn.disabled=true; }
+    await pushToCloud();
+    if(btn){ btn.textContent='✅ 同期完了！'; }
+    await new Promise(r=>setTimeout(r,700));
+  }
   closeReviewModal();
 }
 
@@ -3890,12 +3908,26 @@ async function setupJsonBin(){
 
     // 成功メッセージを表示してから画面更新
     // renderAdmin()を先に呼ぶとresElが消えるため、alertで通知してから更新
-    alert(
-      '✅ クラウド設定が完了しました！\n\n' +
-      '📋 Bin ID:\n' + binId + '\n\n' +
-      'このBin IDを保護者に伝えてください。\n' +
-      '（管理画面にも表示されます）'
-    );
+    // Bin IDをコピーしやすい形でoverlayに表示
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,20,50,.75);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML =
+      '<div style="background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:340px;text-align:center">' +
+        '<div style="font-size:32px;margin-bottom:8px">✅</div>' +
+        '<div style="font-size:16px;font-weight:900;color:#0f2d5e;margin-bottom:6px">クラウド設定完了！</div>' +
+        '<p style="font-size:12px;color:#7a99cc;margin-bottom:12px;line-height:1.6">このBin IDを保護者に伝えてください<br>（管理画面にも常時表示されます）</p>' +
+        '<div style="background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:10px;padding:12px;margin-bottom:12px">' +
+          '<div style="font-size:11px;font-weight:700;color:#3a5080;margin-bottom:4px">📋 Bin ID</div>' +
+          '<div id="new-bin-id-text" style="font-family:monospace;font-size:14px;font-weight:700;color:#0d1b38;word-break:break-all">' + binId + '</div>' +
+        '</div>' +
+        '<button onclick="(function(){' +
+          'navigator.clipboard.writeText(\'' + binId + '\').then(function(){alert(\'✅ コピーしました！\')}).catch(function(){' +
+            'var ta=document.createElement(\'textarea\');ta.value=\'' + binId + '\';document.body.appendChild(ta);ta.select();document.execCommand(\'copy\');document.body.removeChild(ta);alert(\'✅ コピーしました！\');' +
+          '})' +
+        '})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#0f2d5e,#2b72f5);border:none;border-radius:12px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">📋 Bin IDをコピーする</button>' +
+        '<button onclick="this.closest(\'div[style*=fixed]\').remove();(function(){var f=document.getElementById(\'admin-view\');if(f)renderAdmin();})()" style="width:100%;padding:11px;background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:12px;color:#3a5080;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">閉じる</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
     renderAdmin();
   }catch(e){
     show('❌ 通信エラー: ' + e.message, '#e11d48');
