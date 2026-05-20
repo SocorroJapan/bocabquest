@@ -2472,23 +2472,34 @@ function renderQuiz(d){
   // ボーナスワード（全問完了後のみ表示）
   const bonusHtml = allDone ? renderBonus(d.bonus) : '';
 
-  // 全問完了済み（ST.done済み）のDayにいる時：同期ボタンを表示
+  // 全問完了済みのDayにいる時：同期/次の日へボタンを表示
   let syncNextBtn = '';
-  if(allDone && ST.done[ST.cur]){
-    const cfg = getSyncConfig();
-    const hasSyncCfg = !!(cfg.binId);
-    const syncLabel = cfg.binId ? '☁️ 結果を同期して次の日へ' : '次の日へ →';
-    const nextDayIdx = ST.cur + 1;
-    const hasNext = nextDayIdx < (typeof getAllDays==='function' ? getAllDays() : DAYS).length;
-    if(hasNext){
+  if(ST.done[ST.cur]){
+    const _allDays = (typeof getAllDays==='function') ? getAllDays() : DAYS;
+    const _hasNext = ST.cur + 1 < _allDays.length;
+    const _cfg = getSyncConfig();
+    const _label = _cfg.binId ? '☁️ 結果を同期して次の日へ' : '次の日へ →';
+    const _color = _cfg.binId
+      ? 'background:linear-gradient(135deg,#0277bd,#2b72f5)'
+      : 'background:linear-gradient(135deg,#1a4a9e,#2b72f5)';
+    if(_hasNext){
       syncNextBtn = '<button onclick="syncAndNextDay()" style="' +
-        'margin-top:14px;width:100%;padding:14px;' +
-        'background:linear-gradient(135deg,#0277bd,#2b72f5);' +
+        'margin-top:14px;width:100%;padding:14px;' + _color + ';' +
         'border:none;border-radius:14px;color:#fff;' +
         'font-family:inherit;font-size:15px;font-weight:800;' +
         'cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;' +
         'box-shadow:0 4px 16px rgba(2,119,189,.35)">' +
-        syncLabel + '</button>';
+        _label + '</button>';
+    } else {
+      // 最終Dayの場合は同期だけするボタン
+      if(_cfg.binId){
+        syncNextBtn = '<button onclick="manualSync()" style="' +
+          'margin-top:14px;width:100%;padding:14px;' +
+          'background:linear-gradient(135deg,#0277bd,#2b72f5);' +
+          'border:none;border-radius:14px;color:#fff;' +
+          'font-family:inherit;font-size:15px;font-weight:800;' +
+          'cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">☁️ 結果を同期する</button>';
+      }
     }
   }
 
@@ -3240,14 +3251,13 @@ function renderAdmin(){
   html += '<div class="adm-section"><div class="adm-card">';
   html += '<div class="adm-card-ttl">🔍 子供の学習レポートを見る</div>';
   html += '<div class="adm-card-body">';
-  html += '<div id="view-result" style="margin-bottom:8px"></div>';
-  if(!syncCfg.binId){
-    html += '<label style="font-size:12px;font-weight:700;color:#0d1b38;display:block;margin-bottom:4px">子供のスマホのBin ID</label>';
-    html += '<input id="parent-bucket-input" style="width:100%;padding:9px 10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;box-sizing:border-box;margin-bottom:8px;font-family:monospace" placeholder="例: 67a1b2c3d4e5f6a7b8c9d0e1">';
-    html += '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="saveParentBucketId()">📊 学習レポートを見る</button>';
+  if(syncCfg.binId){
+    html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:8px">子供のスマホのデータを取得します</p>';
   } else {
-    html += '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="viewReportFixed()">📊 学習レポートを見る</button>';
+    html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:8px">初回は子供のスマホのBin IDを入力してください</p>';
   }
+  html += '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="viewReportFixed()">📊 学習レポートを見る</button>';
+  html += '<div id="view-result" style="margin-top:10px"></div>';
   html += '</div></div></div>';
 
 
@@ -4201,14 +4211,21 @@ async function viewReportFixed(){
     }
     const raw = await res.text();
     let payload;
-    try{ payload = JSON.parse(raw); }
-    catch(e){
+    try{
+      const parsed = JSON.parse(raw);
+      // JSONBinはX-Bin-Meta:falseでもrecordキーに包む場合がある
+      payload = parsed.record || parsed;
+    }catch(e){
       resEl.style.color = '#e11d48';
-      resEl.textContent = '❌ データ解析エラー: ' + e.message;
+      resEl.textContent = '❌ データ解析エラー: ' + e.message + ' / 受信: ' + raw.slice(0,80);
       return;
     }
-    // JSONBinはrecordキーにデータを包む場合がある
-    if(payload.record) payload = payload.record;
+    // verキーがあるか確認（正しい学習データか）
+    if(!payload || (!payload.ver && !payload.done && !payload.ans)){
+      resEl.style.color = '#e11d48';
+      resEl.textContent = '❌ 学習データの形式が正しくありません。子供のスマホで再度同期してください。';
+      return;
+    }
     resEl.textContent = '';
     showCloudReport(payload);
   }catch(e){
