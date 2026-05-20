@@ -3234,7 +3234,11 @@ function renderAdmin(){
           '<div style="font-size:10px;color:#7a99cc;margin-top:3px">↑ 長押しでコピーできます</div>' +
         '</div>' +
         '<div style="margin-bottom:8px;font-size:11px;color:#7a99cc">最終同期: <span id="last-sync-time">' + (syncCfg.lastSync ? new Date(syncCfg.lastSync).toLocaleString('ja-JP') : '未同期') + '</span></div>' +
-        '<button class="game-save-btn" style="margin-top:0;background:linear-gradient(135deg,#0277bd,#0288d1)" onclick="manualSync()">☁️ 今すぐ同期</button>'
+        '<div style="display:flex;gap:8px">' +
+          '<button class="game-save-btn" style="margin-top:0;flex:1;background:linear-gradient(135deg,#0277bd,#0288d1)" onclick="manualSync()">☁️ 今すぐ同期</button>' +
+          '<button class="game-save-btn" style="margin-top:0;flex:1;background:linear-gradient(135deg,#374151,#6b7280)" onclick="testKvdbConnection()">🔧 接続テスト</button>' +
+        '</div>' +
+        '<div id="kvdb-test-result" style="margin-top:6px;font-size:11px;line-height:1.7"></div>'
       : '<div style="background:#fef9c3;border-radius:10px;padding:10px 12px;font-size:12px;color:#a16207;font-weight:700;margin-bottom:10px">⚠️ 未設定 ― 下のボタンで初回設定してください</div>' +
         '<button class="game-save-btn" onclick="setupKvdb()">🚀 クラウド設定（初回のみ）</button>' +
         '<div id="kvdb-setup-result" style="margin-top:8px;font-size:12px"></div>'
@@ -3863,9 +3867,10 @@ async function setupKvdb(){
           saveSyncConfig(cfg);
           await pushToCloud();
           updateSyncBtn();
-          // bucketIdをlocalStorageに保存済み → renderAdminで常に表示されるよう変更
           updateSyncBtn();
-          renderAdmin(); // 管理画面を更新（同期セクションにIDが表示される）
+          // データを同期してから管理画面を更新
+          await pushToCloud();
+          renderAdmin();
           return;
         }
       }
@@ -3991,19 +3996,22 @@ async function pushToCloud(){
   const cfg = getSyncConfig();
   if(!cfg.bucketId) return;
   try{
+    const payload = JSON.stringify(buildSyncPayload());
     const res = await fetch(KVDB_BASE + '/' + cfg.bucketId + '/' + KVDB_KEY, {
       method: 'PUT',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(buildSyncPayload())
+      body: payload
     });
     if(res.ok){
       cfg.lastSync = Date.now();
       saveSyncConfig(cfg);
       const el = document.getElementById('last-sync-time');
       if(el) el.textContent = new Date(cfg.lastSync).toLocaleString('ja-JP');
+    } else {
+      console.warn('pushToCloud failed:', res.status, await res.text());
     }
   }catch(e){
-    console.warn('pushToCloud failed:', e.message);
+    console.warn('pushToCloud error:', e.message);
   }
 }
 
@@ -4057,10 +4065,19 @@ async function viewReportFixed(){
   resEl.textContent = '⏳ データを取得中...';
   try{
     const url = KVDB_BASE + '/' + cfg.bucketId + '/' + KVDB_KEY;
-    const res = await fetch(url, { method: 'GET' });
+    console.log('GET URL:', url); // デバッグ用
+    const res = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store'  // キャッシュを使わず最新データを取得
+    });
     if(!res.ok){
       resEl.style.color = '#e11d48';
-      resEl.textContent = '❌ 取得失敗(' + res.status + ')';
+      const errText = await res.text().catch(()=>'');
+      if(res.status === 404){
+        resEl.innerHTML = '❌ データが見つかりません（404）<br>子供のスマホで「☁️ 今すぐ同期」を押してから<br>もう一度試してください';
+      } else {
+        resEl.textContent = '❌ 取得失敗 (' + res.status + ') ' + errText.slice(0,50);
+      }
       return;
     }
     // kvdb.ioはtext/plainで返す場合があるため両方対応
@@ -4090,6 +4107,64 @@ async function saveParentBucketId(){
   saveSyncConfig(cfg);
   updateSyncBtn();
   viewReportFixed(); // すぐ取得実行
+}
+
+// kvdb.io接続テスト（PUT→GET往復確認）
+async function testKvdbConnection(){
+  const resEl = document.getElementById('kvdb-test-result');
+  const cfg = getSyncConfig();
+  const show = (msg) => { if(resEl) resEl.innerHTML = msg; };
+  
+  if(!cfg.bucketId){
+    show('<span style="color:#e11d48">❌ バケットID未設定</span>');
+    return;
+  }
+  
+  show('⏳ テスト中...');
+  const testKey = 'vq_test_' + Date.now();
+  const testUrl = 'https://kvdb.io/' + cfg.bucketId + '/' + testKey;
+  const mainUrl = 'https://kvdb.io/' + cfg.bucketId + '/vq_latest';
+  
+  try{
+    // ① テスト値をPUT
+    const putRes = await fetch(testUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      body: 'test_ok'
+    });
+    if(!putRes.ok){
+      show('<span style="color:#e11d48">❌ PUT失敗: ' + putRes.status + ' ' + (await putRes.text()) + '</span>');
+      return;
+    }
+    show('✅ PUT成功(' + putRes.status + ')');
+    
+    // ② テスト値をGET
+    await new Promise(r=>setTimeout(r,500));
+    const getRes = await fetch(testUrl, { method:'GET', cache:'no-store' });
+    const getBody = await getRes.text();
+    if(!getRes.ok || getBody !== 'test_ok'){
+      show('✅ PUT成功 / ❌ GET失敗: ' + getRes.status + ' 受信:' + getBody.slice(0,30));
+      return;
+    }
+    show('✅ PUT成功 / ✅ GET成功<br>');
+    
+    // ③ 実データのGETも試す
+    const dataRes = await fetch(mainUrl, { method:'GET', cache:'no-store' });
+    if(dataRes.status === 404){
+      show('✅ 接続OK / ⚠️ vq_latestキーが404<br><small style="color:#a16207">→「今すぐ同期」を押してデータを書き込んでください</small>');
+    } else if(dataRes.ok){
+      const dataText = await dataRes.text();
+      show('✅ 接続OK / ✅ データあり(' + dataText.length + 'bytes)');
+    } else {
+      show('✅ 接続OK / ❌ データ取得失敗: ' + dataRes.status);
+    }
+    
+    // テスト用キーを削除
+    fetch(testUrl, {method:'DELETE'}).catch(()=>{});
+    
+  }catch(e){
+    show('<span style="color:#e11d48">❌ 通信エラー: ' + e.message + '</span>');
+  }
 }
 
 // 旧viewReport（互換性のため残す）
