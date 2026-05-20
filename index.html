@@ -3208,18 +3208,41 @@ function renderAdmin(){
   html += (totalDone===0 ? '<div class="adm-empty">まだ学習記録がありません</div>' : '');
   html += '</div></div></div>';
 
-    // ── 共有・レポートセクション ──
+
+  // ── クラウド同期セクション ──
+  const syncCfg = getSyncConfig();
   html += '<div class="adm-section"><div class="adm-card">';
-  html += '<div class="adm-card-ttl">📤 学習状況を共有する</div>';
+  html += '<div class="adm-card-ttl">☁️ クラウド同期（保護者閲覧用）</div>';
   html += '<div class="adm-card-body">';
-  html += '<p style="font-size:12px;color:#3a5080;line-height:1.7;margin-bottom:12px">';
-  html += '学習データをURLに変換します。<br>LINEやメモアプリで親のスマホに送ってください。';
-  html += '</p>';
-  html += '<button class="game-save-btn" onclick="openShareModal()">📤 共有URLを生成する</button>';
-  html += '<div style="margin-top:10px;padding:10px 12px;background:#f0f6ff;border-radius:10px;font-size:11px;color:#3a5080">';
-  html += '✅ 外部サービス不要<br>✅ 登録・認証不要<br>✅ URLを送るだけで親が確認可能';
-  html += '</div>';
+  if(syncCfg.binId){
+    html += '<div style="background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12px;color:#15803d;font-weight:700;margin-bottom:8px">✅ 設定済み（自動同期が有効です）</div>';
+    html += '<div style="margin-bottom:10px;padding:10px 12px;background:#f0f6ff;border-radius:10px;border:1.5px solid #ddeeff">';
+    html += '<div style="font-size:11px;font-weight:700;color:#3a5080;margin-bottom:4px">📋 Bin ID（親のスマホで必要）</div>';
+    html += '<div style="font-family:monospace;font-size:13px;font-weight:700;color:#0d1b38;word-break:break-all;user-select:all">' + syncCfg.binId + '</div>';
+    html += '<div style="font-size:10px;color:#7a99cc;margin-top:3px">↑ 長押しでコピーできます</div>';
+    html += '</div>';
+    html += '<div style="margin-bottom:8px;font-size:11px;color:#7a99cc">最終同期: <span id="last-sync-time">' + (syncCfg.lastSync ? new Date(syncCfg.lastSync).toLocaleString('ja-JP') : '未同期') + '</span></div>';
+    html += '<button class="game-save-btn" style="margin-top:0;background:linear-gradient(135deg,#0277bd,#0288d1)" onclick="manualSync()">☁️ 今すぐ同期</button>';
+  } else {
+    html += '<p style="font-size:12px;color:#3a5080;line-height:1.7;margin-bottom:12px">保護者が別のスマホから学習状況を確認できます。<br>下のボタンで初回設定してください。</p>';
+    html += '<button class="game-save-btn" onclick="setupJsonBin()">🚀 クラウド設定（初回のみ）</button>';
+    html += '<div id="jsonbin-setup-result" style="margin-top:8px;font-size:12px"></div>';
+  }
   html += '</div></div></div>';
+  // 保護者閲覧セクション
+  html += '<div class="adm-section"><div class="adm-card">';
+  html += '<div class="adm-card-ttl">🔍 子供の学習レポートを見る</div>';
+  html += '<div class="adm-card-body">';
+  html += '<div id="view-result" style="margin-bottom:8px"></div>';
+  if(!syncCfg.binId){
+    html += '<label style="font-size:12px;font-weight:700;color:#0d1b38;display:block;margin-bottom:4px">子供のスマホのBin ID</label>';
+    html += '<input id="parent-bucket-input" style="width:100%;padding:9px 10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;box-sizing:border-box;margin-bottom:8px;font-family:monospace" placeholder="例: 67a1b2c3d4e5f6a7b8c9d0e1">';
+    html += '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="saveParentBucketId()">📊 学習レポートを見る</button>';
+  } else {
+    html += '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="viewReportFixed()">📊 学習レポートを見る</button>';
+  }
+  html += '</div></div></div>';
+
 
   // ── ゲーム時間設定セクション ──
   const cfg     = getGameSettings();
@@ -3771,19 +3794,47 @@ const _origCloseReview = closeReviewModal;
 // ══════════════════════════════════════════════════════
 
 const SYNC_CFG_KEY = 'vq_sync_cfg';
-const KVDB_BASE = 'https://kvdb.io';
-// ── kvdb.io設定（登録不要・無料） ──
-const KVDB_KEY  = 'vq_latest'; // バケット内のキー名（固定）
-
+const KVDB_BASE = 'https://kvdb.io'; // legacy
+// ── JSONBin設定（クラウド同期） ──
+const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
+const JSONBIN_KEY  = '$2a$10$vJ4Wgh88PX.k.c9Ft3hipuZHecGpzRCLSdGMMxdvVNJDEfwLpcLMG';
 
 function getSyncConfig(){
   try{
-    return JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}');
+    const s = JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}');
+    return s;
   } catch(e){ return {}; }
 }
 function saveSyncConfig(cfg){
   try{ localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(cfg)); }catch(e){}
 }
+
+async function pushToCloud(){
+  const cfg = getSyncConfig();
+  if(!cfg.binId) return; // Bin未設定
+  try{
+    const res = await fetch(JSONBIN_BASE + '/b/' + cfg.binId, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_KEY
+      },
+      body: JSON.stringify(buildSyncPayload())
+    });
+    if(res.ok){
+      cfg.lastSync = Date.now();
+      saveSyncConfig(cfg);
+      const el = document.getElementById('last-sync-time');
+      if(el) el.textContent = new Date(cfg.lastSync).toLocaleString('ja-JP');
+    } else {
+      const e = await res.json().catch(()=>({}));
+      console.warn('pushToCloud failed:', res.status, e.message||'');
+    }
+  }catch(e){
+    console.warn('pushToCloud error:', e.message);
+  }
+}
+
 
 // kvdb.ioのバケットIDが設定済みか確認
 function applyFixedSyncConfig(){
@@ -3793,28 +3844,69 @@ function applyFixedSyncConfig(){
 
 // 同期ボタンの表示制御
 function updateSyncBtn(){
-  const btn = document.getElementById('sync-btn');
+  const btn = document.getElementById('share-btn');
   if(!btn) return;
-  const cfg = getSyncConfig();
-  btn.style.display = cfg.bucketId ? 'inline-flex' : 'none';
+  // share-btnは常に表示（共有ボタン）
 }
 
 // 初回同期：Binを作成してBin IDを取得
 // クラウド同期 初回設定（複数サービス順番に試行）
-async function setupKvdb(){
-  const resEl = document.getElementById('kvdb-setup-result');
-  if(!resEl) return;
-  resEl.style.cssText='font-size:12px;line-height:1.8;color:#0d1b38';
-  resEl.innerHTML =
-    '<b>📧 メールアドレスを入力してください</b><br>' +
-    '<span style="font-size:11px;color:#7a99cc">kvdb.ioへの登録に使います。認証メールが届きます。</span><br><br>' +
-    '<input id="kvdb-email-input" type="email" style="display:block;width:100%;padding:10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;box-sizing:border-box;margin-bottom:8px" placeholder="your@email.com">' +
-    '<button onclick="createKvdbBucket()" style="width:100%;padding:12px;background:linear-gradient(135deg,#0f2d5e,#2b72f5);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🚀 バケットを作成する</button>' +
-    '<div style="margin-top:10px;padding:10px;background:#f0f6ff;border-radius:8px;font-size:11px;color:#3a5080">' +
-    '※ 認証メールが届いたらリンクをクリックしてください<br>' +
-    '※ 既にkvdb.ioアカウントをお持ちならそのメールアドレスを入力' +
-    '</div>';
+// JSONBinのBinを自動作成（初回セットアップ）
+async function setupJsonBin(){
+  const resEl = document.getElementById('jsonbin-setup-result');
+  const show = (msg, color) => {
+    if(!resEl) return;
+    resEl.style.cssText = 'font-size:12px;line-height:1.6;color:' + (color||'#a16207');
+    resEl.innerHTML = msg;
+  };
+  show('⏳ Bin作成中...');
+  try{
+    const res = await fetch(JSONBIN_BASE + '/b', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_KEY,
+        'X-Bin-Name': 'VocabularyQuest',
+        'X-Bin-Private': 'true'
+      },
+      body: JSON.stringify(buildSyncPayload())
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      show('❌ 作成失敗(' + res.status + '): ' + (err.message||''), '#e11d48');
+      return;
+    }
+    const data = await res.json();
+    const binId = data.metadata && data.metadata.id;
+    if(!binId){
+      show('❌ Bin IDの取得に失敗しました', '#e11d48');
+      return;
+    }
+    const cfg = getSyncConfig();
+    cfg.binId = binId;
+    cfg.lastSync = Date.now();
+    saveSyncConfig(cfg);
+    updateSyncBtn();
+    renderAdmin();
+  }catch(e){
+    show('❌ 通信エラー: ' + e.message, '#e11d48');
+  }
 }
+
+// manualSyncをJSONBin対応に（pushToCloud呼び出し）
+async function manualSync(){
+  const btn = document.getElementById('share-btn');
+  if(btn){ btn.textContent='⏳'; btn.disabled=true; }
+  await pushToCloud();
+  if(btn){ btn.textContent='📤'; btn.disabled=false; }
+  const cfg = getSyncConfig();
+  if(cfg.lastSync){
+    const el = document.getElementById('last-sync-time');
+    if(el) el.textContent = new Date(cfg.lastSync).toLocaleString('ja-JP');
+  }
+}
+
+async function setupKvdb(){ setupJsonBin(); } // 互換性
 
 // メールアドレスでkvdb.ioバケットを作成
 async function createKvdbBucket(){
@@ -3977,7 +4069,7 @@ function buildSyncPayload(){
 }
 
 // ※ pushToCloudは上部の共有URL版で上書き済み（この関数は呼ばれない）
-async function _unused_pushToCloud_legacy(){
+async function __unused_push_legacy(){
   const cfg = getSyncConfig();
   if(!cfg.bucketId) return;
   try{
@@ -4037,11 +4129,11 @@ async function viewReportFixed(){
   if(!resEl) return;
   const cfg = getSyncConfig();
 
-  // bucketIdがない場合（親スマホ初回）→ 入力欄を表示
-  if(!cfg.bucketId){
+  // binIdがない場合（親スマホ初回）→ 入力欄を表示
+  if(!cfg.binId){
     resEl.innerHTML =
-      '<div style="font-size:12px;color:#a16207;margin-bottom:8px">⚠️ 子供のスマホで設定したIDを入力してください</div>' +
-      '<input id="parent-bucket-input" style="width:100%;padding:9px 10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;box-sizing:border-box;margin-bottom:8px" placeholder="子供のスマホのバケットID">' +
+      '<div style="font-size:12px;color:#a16207;margin-bottom:8px">⚠️ 子供のスマホのBin IDを入力してください</div>' +
+      '<input id="parent-bucket-input" style="width:100%;padding:9px 10px;border:2px solid #ddeeff;border-radius:10px;font-size:13px;box-sizing:border-box;margin-bottom:8px;font-family:monospace" placeholder="例: 67a1b2c3d4e5f6a7b8c9d0e1">' +
       '<button onclick="saveParentBucketId()" style="width:100%;padding:11px;background:linear-gradient(135deg,#1b5e20,#2e7d32);border:none;border-radius:10px;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">保存して見る</button>';
     return;
   }
@@ -4049,31 +4141,33 @@ async function viewReportFixed(){
   resEl.style.cssText = 'font-size:12px;line-height:1.6;color:#a16207';
   resEl.textContent = '⏳ データを取得中...';
   try{
-    const url = KVDB_BASE + '/' + cfg.bucketId + '/' + KVDB_KEY;
-    console.log('GET URL:', url); // デバッグ用
-    const res = await fetch(url, {
+    const res = await fetch(JSONBIN_BASE + '/b/' + cfg.binId + '/latest', {
       method: 'GET',
-      cache: 'no-store'  // キャッシュを使わず最新データを取得
+      headers: {
+        'X-Master-Key': JSONBIN_KEY,
+        'X-Bin-Meta': 'false'
+      }
     });
     if(!res.ok){
-      resEl.style.color = '#e11d48';
       const errText = await res.text().catch(()=>'');
+      resEl.style.color = '#e11d48';
       if(res.status === 404){
-        resEl.innerHTML = '❌ データが見つかりません（404）<br>子供のスマホで「☁️ 今すぐ同期」を押してから<br>もう一度試してください';
+        resEl.innerHTML = '❌ データが見つかりません（404）<br>子供のスマホで「☁️ 今すぐ同期」を押してから再度試してください';
       } else {
-        resEl.textContent = '❌ 取得失敗 (' + res.status + ') ' + errText.slice(0,50);
+        resEl.textContent = '❌ 取得失敗(' + res.status + ') ' + errText.slice(0,50);
       }
       return;
     }
-    // kvdb.ioはtext/plainで返す場合があるため両方対応
+    const raw = await res.text();
     let payload;
-    const text = await res.text();
-    try{ payload = JSON.parse(text); }
+    try{ payload = JSON.parse(raw); }
     catch(e){
-      resEl.style.color='#e11d48';
-      resEl.textContent='❌ データ解析エラー: '+e.message+' / 受信: '+text.slice(0,50);
+      resEl.style.color = '#e11d48';
+      resEl.textContent = '❌ データ解析エラー: ' + e.message;
       return;
     }
+    // JSONBinはrecordキーにデータを包む場合がある
+    if(payload.record) payload = payload.record;
     resEl.textContent = '';
     showCloudReport(payload);
   }catch(e){
@@ -4086,12 +4180,12 @@ async function viewReportFixed(){
 async function saveParentBucketId(){
   const inp = document.getElementById('parent-bucket-input');
   const id = inp ? inp.value.trim() : '';
-  if(!id){ alert('IDを入力してください'); return; }
+  if(!id){ alert('Bin IDを入力してください'); return; }
   const cfg = getSyncConfig();
-  cfg.bucketId = id;
+  cfg.binId = id;
   saveSyncConfig(cfg);
   updateSyncBtn();
-  viewReportFixed(); // すぐ取得実行
+  viewReportFixed();
 }
 
 // kvdb.io接続テスト（PUT→GET往復確認）
