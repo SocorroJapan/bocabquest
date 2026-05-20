@@ -399,7 +399,7 @@ strong {
         <span id="rv-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:99px;align-items:center;justify-content:center;border:1.5px solid #fff;font-family:'Nunito',sans-serif"></span>
       </div>
       <button class="chat-btn" onclick="openChat()">💬</button>
-      <button class="chat-btn" id="sync-btn" onclick="manualSync()" title="クラウド同期" style="background:linear-gradient(135deg,#0277bd,#0288d1);display:none">☁️</button>
+      <button class="chat-btn" id="share-btn" onclick="openShareModal()" title="学習状況を共有" style="background:linear-gradient(135deg,#0277bd,#0288d1)">📤</button>
       <button class="chat-btn" onclick="openAdmin()" title="管理画面" style="background:linear-gradient(135deg,#374151,#6b7280)">⚙️</button>
     </div>
   </div>
@@ -471,6 +471,17 @@ strong {
 <!-- ══ 管理画面 ══ -->
 <div id="admin-view">
   <!-- パスワード画面 -->
+  <!-- 📤 共有モーダル -->
+  <div id="share-modal" style="display:none;position:fixed;inset:0;background:rgba(10,20,50,.7);z-index:300;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:360px">
+      <h2 style="font-size:17px;font-weight:900;color:#0f2d5e;margin-bottom:8px;text-align:center">📤 学習状況を共有</h2>
+      <p style="font-size:12px;color:#7a99cc;margin-bottom:14px;text-align:center;line-height:1.6">URLをコピーして保護者に送ってください。<br>URLを開くと学習レポートが表示されます。</p>
+      <div id="share-url-box" style="background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:10px;padding:10px 12px;font-size:11px;font-family:monospace;word-break:break-all;color:#0d1b38;margin-bottom:12px;min-height:40px;line-height:1.6">生成中...</div>
+      <button onclick="copyShareUrl()" style="width:100%;padding:12px;background:linear-gradient(135deg,#0f2d5e,#2b72f5);border:none;border-radius:12px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">📋 URLをコピーする</button>
+      <button onclick="closeShareModal()" style="width:100%;padding:11px;background:#f0f6ff;border:1.5px solid #ddeeff;border-radius:12px;color:#3a5080;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">閉じる</button>
+    </div>
+  </div>
+
   <div id="adm-pw-screen" class="adm-pw">
     <!-- ① モード選択 -->
     <div class="adm-pw-box" id="adm-mode-select">
@@ -2466,9 +2477,7 @@ function renderQuiz(d){
   if(allDone && ST.done[ST.cur]){
     const cfg = getSyncConfig();
     const hasSyncCfg = !!(cfg.bucketId);
-    const syncLabel = hasSyncCfg
-      ? '☁️ 結果を同期して次の日へ'
-      : '次の日へ →';
+    const syncLabel = '次の日へ →';
     const nextDayIdx = ST.cur + 1;
     const hasNext = nextDayIdx < (typeof getAllDays==='function' ? getAllDays() : DAYS).length;
     if(hasNext){
@@ -2612,17 +2621,7 @@ function retryDay(){
 }
 // 同期して次の日へ進む
 async function syncAndNextDay(){
-  const cfg = getSyncConfig();
-  const hasSyncCfg = !!(cfg.bucketId);
-  const btn = document.querySelector('[onclick="syncAndNextDay()"]');
-
-  if(hasSyncCfg){
-    if(btn){ btn.textContent = '⏳ 同期中...'; btn.disabled = true; }
-    await pushToCloud();
-    if(btn){ btn.textContent = '✅ 同期完了！'; }
-    await new Promise(r => setTimeout(r, 600));
-  }
-
+  // 共有URLを生成してからday移動
   chDay(1);
 }
 
@@ -3005,21 +3004,14 @@ function renderUserAdmin(){
   html += '<div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,#1a4a9e,#2b72f5);border-radius:99px;transition:width .6s"></div>';
   html += '</div></div></div></div>';
 
-  // クラウド同期（保護者閲覧セクションなし）
-  const syncCfg = getSyncConfig();
+
+  // 共有セクション（URL方式）
   html += '<div class="adm-section"><div class="adm-card">';
-  html += '<div class="adm-card-ttl">☁️ クラウド同期</div>';
+  html += '<div class="adm-card-ttl">📤 学習状況を共有する</div>';
   html += '<div class="adm-card-body">';
-  // 固定設定済みなのでシンプルに同期ボタンのみ表示
   html += '<p style="font-size:12px;color:#3a5080;line-height:1.6;margin-bottom:10px">';
-  html += '学習が終わったら「今すぐ同期」を押すと、<br>保護者のスマホから学習状況が確認できます。</p>';
-  if(syncCfg.bucketId){
-    html += '<p style="font-size:11px;color:#7a99cc;margin-bottom:10px">最終同期: '+(syncCfg.lastSync?new Date(syncCfg.lastSync).toLocaleString('ja-JP'):'まだ同期していません')+'</p>';
-    html += '<button class="game-save-btn" style="margin-top:0" onclick="manualSync()">☁️ 今すぐ同期する</button>';
-  } else {
-    html += '<div style="background:#fef9c3;border-radius:10px;padding:10px 12px;font-size:12px;color:#a16207;font-weight:700;margin-bottom:8px">⚠️ 未設定 ― 管理者ログインから初回設定が必要です</div>';
-  }
-  html += '<div id="usr-sync-result" style="margin-top:8px;font-size:12px"></div>';
+  html += '学習データをURLに変換して保護者に送れます。<br>登録・設定不要で今すぐ使えます。</p>';
+  html += '<button class="game-save-btn" style="margin-top:0" onclick="openShareModal()">📤 共有URLを生成する</button>';
   html += '</div></div></div>';
 
   document.getElementById('adm-body').innerHTML = html;
@@ -3216,39 +3208,18 @@ function renderAdmin(){
   html += (totalDone===0 ? '<div class="adm-empty">まだ学習記録がありません</div>' : '');
   html += '</div></div></div>';
 
-  // ── クラウド同期設定セクション ──
-  const syncCfg = getSyncConfig();
-  const syncSt  = syncCfg.apiKey && syncCfg.binId ? 'on' : 'off';
-  html += '<div class="adm-section"><div class="adm-card">' +
-    '<div class="adm-card-ttl">☁️ クラウド同期（保護者閲覧用）</div>' +
-    '<div class="adm-card-body">' +
-    '<p style="font-size:12px;color:#3a5080;line-height:1.7;margin-bottom:10px">' +
-      '学習データをクラウドに保存します。<br>' +
-      '保護者が別のスマホから学習状況を確認できます。' +
-    '</p>' +
-    (syncCfg.bucketId
-      ? '<div style="background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12px;color:#15803d;font-weight:700;margin-bottom:8px">✅ 設定済み（自動同期が有効です）</div>' +
-        '<div style="margin-bottom:10px;padding:10px 12px;background:#f0f6ff;border-radius:10px;border:1.5px solid #ddeeff">' +
-          '<div style="font-size:11px;font-weight:700;color:#3a5080;margin-bottom:4px">📋 バケットID（親のスマホで必要）</div>' +
-          '<div style="font-family:monospace;font-size:13px;font-weight:700;color:#0d1b38;word-break:break-all;user-select:all">' + syncCfg.bucketId + '</div>' +
-          '<div style="font-size:10px;color:#7a99cc;margin-top:3px">↑ 長押しでコピーできます</div>' +
-        '</div>' +
-        '<div style="margin-bottom:8px;font-size:11px;color:#7a99cc">最終同期: <span id="last-sync-time">' + (syncCfg.lastSync ? new Date(syncCfg.lastSync).toLocaleString('ja-JP') : '未同期') + '</span></div>' +
-        '<div style="display:flex;gap:8px">' +
-          '<button class="game-save-btn" style="margin-top:0;flex:1;background:linear-gradient(135deg,#0277bd,#0288d1)" onclick="manualSync()">☁️ 今すぐ同期</button>' +
-          '<button class="game-save-btn" style="margin-top:0;flex:1;background:linear-gradient(135deg,#374151,#6b7280)" onclick="testKvdbConnection()">🔧 接続テスト</button>' +
-        '</div>' +
-        '<div id="kvdb-test-result" style="margin-top:6px;font-size:11px;line-height:1.7"></div>'
-      : '<div style="background:#fef9c3;border-radius:10px;padding:10px 12px;font-size:12px;color:#a16207;font-weight:700;margin-bottom:10px">⚠️ 未設定 ― 下のボタンで初回設定してください</div>' +
-        '<button class="game-save-btn" onclick="setupKvdb()">🚀 クラウド設定（初回のみ）</button>' +
-        '<div id="kvdb-setup-result" style="margin-top:8px;font-size:12px"></div>'
-    ) +
-    '<hr style="margin:14px 0;border:none;border-top:1px solid #f0f6ff">' +
-    '<p style="font-size:12px;font-weight:700;color:#0d1b38;margin-bottom:6px">🔍 子供の学習レポートを見る</p>' +
-    '<p style="font-size:11px;color:#7a99cc;margin-bottom:8px">子供がアップロードした最新データを表示します</p>' +
-    '<button class="game-save-btn" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)" onclick="viewReportFixed()">📊 学習レポートを見る</button>' +
-    '<div id="view-result" style="margin-top:8px"></div>' +
-    '</div></div></div>';
+    // ── 共有・レポートセクション ──
+  html += '<div class="adm-section"><div class="adm-card">';
+  html += '<div class="adm-card-ttl">📤 学習状況を共有する</div>';
+  html += '<div class="adm-card-body">';
+  html += '<p style="font-size:12px;color:#3a5080;line-height:1.7;margin-bottom:12px">';
+  html += '学習データをURLに変換します。<br>LINEやメモアプリで親のスマホに送ってください。';
+  html += '</p>';
+  html += '<button class="game-save-btn" onclick="openShareModal()">📤 共有URLを生成する</button>';
+  html += '<div style="margin-top:10px;padding:10px 12px;background:#f0f6ff;border-radius:10px;font-size:11px;color:#3a5080">';
+  html += '✅ 外部サービス不要<br>✅ 登録・認証不要<br>✅ URLを送るだけで親が確認可能';
+  html += '</div>';
+  html += '</div></div></div>';
 
   // ── ゲーム時間設定セクション ──
   const cfg     = getGameSettings();
@@ -3518,9 +3489,7 @@ function renderReviewModal(){
       '<div style="font-size:14px;color:#7c3aed;margin-bottom:4px">正解: ' + corrects + ' / ' + q.length + ' 問</div>' +
       '<div style="font-size:12px;color:#a78bfa;margin-bottom:20px">長期記憶: ' + getLongTermCount() + ' 語</div>' +
       // 同期設定があれば「同期して閉じる」、なければ「閉じる」
-      (getSyncConfig().bucketId
-        ? '<button onclick="syncAndCloseReview()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0277bd,#2b72f5);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px" id="sync-close-btn">☁️ 結果を同期して閉じる</button>'
-        : '') +
+      
       '<button onclick="closeReviewModal()" style="width:100%;padding:12px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">閉じる</button>' +
       '</div>';
     return;
@@ -3594,11 +3563,6 @@ function nextReview(){
 
 // 復習：同期して閉じる
 async function syncAndCloseReview(){
-  const btn = document.getElementById('sync-close-btn');
-  if(btn){ btn.textContent = '⏳ 同期中...'; btn.disabled = true; }
-  await pushToCloud();
-  if(btn){ btn.textContent = '✅ 同期完了！'; }
-  await new Promise(r => setTimeout(r, 600));
   closeReviewModal();
 }
 
@@ -4012,8 +3976,8 @@ function buildSyncPayload(){
   return payload;
 }
 
-// JSONBinにデータを送信
-async function pushToCloud(){
+// ※ pushToCloudは上部の共有URL版で上書き済み（この関数は呼ばれない）
+async function _unused_pushToCloud_legacy(){
   const cfg = getSyncConfig();
   if(!cfg.bucketId) return;
   try{
@@ -4508,17 +4472,145 @@ function initUploadTemplate(){
   if(el)el.textContent=UPLOAD_TEMPLATE;
 }
 
+
+// ══════════════════════════════════════════════════════
+// 📤 共有URL方式（外部サービス不要）
+// ══════════════════════════════════════════════════════
+
+// 学習データをURL-safe Base64に圧縮エンコード
+function encodeReportData(){
+  const allDays = (typeof getAllDays==='function') ? getAllDays() : DAYS;
+  const payload = {
+    ver:    'vq2',
+    ts:     Date.now(),
+    cur:    ST.cur,
+    streak: ST.streak,
+    done:   ST.done   || {},
+    ans:    ST.ans    || {},
+    rs:     ST.reviewState || {},
+    game:   (() => {
+      try{
+        const gd = JSON.parse(localStorage.getItem('vq_game_'+new Date().toISOString().slice(0,10))||'{}');
+        return { min: typeof calcTotalGameMin==='function' ? calcTotalGameMin(gd) : 0 };
+      }catch(e){ return {min:0}; }
+    })(),
+    summary:{
+      totalDays: allDays.filter(d=>d.mode==='quiz').length,
+      doneDays:  Object.values(ST.done||{}).filter(Boolean).length
+    }
+  };
+  try{
+    const json = JSON.stringify(payload);
+    // pako（zlib）がなければ単純Base64
+    const encoded = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g,
+      (_,p)=>String.fromCharCode(parseInt(p,16))));
+    return encoded;
+  }catch(e){ return ''; }
+}
+
+// デコード（親スマホ側）
+function decodeReportData(encoded){
+  try{
+    const json = decodeURIComponent(
+      atob(encoded).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    );
+    return JSON.parse(json);
+  }catch(e){ return null; }
+}
+
+// 共有URLを生成して表示
+function openShareModal(){
+  const modal = document.getElementById('share-modal');
+  if(modal){ modal.style.display = 'flex'; }
+
+  const encoded = encodeReportData();
+  const base = location.href.split('?')[0].split('#')[0];
+  const url = base + '?report=' + encoded;
+
+  const box = document.getElementById('share-url-box');
+  if(box) box.textContent = url;
+}
+
+function closeShareModal(){
+  const modal = document.getElementById('share-modal');
+  if(modal) modal.style.display = 'none';
+}
+
+function copyShareUrl(){
+  const box = document.getElementById('share-url-box');
+  const url = box ? box.textContent : '';
+  if(!url) return;
+  navigator.clipboard.writeText(url)
+    .then(()=>{ alert('✅ URLをコピーしました！\nLINEやメモアプリで保護者に送ってください。'); })
+    .catch(()=>{
+      // フォールバック
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('✅ URLをコピーしました！');
+    });
+}
+
+// URLパラメータからレポートを表示（親スマホ側）
+function checkReportMode(){
+  const params = new URLSearchParams(location.search);
+  const encoded = params.get('report');
+  if(!encoded) return false;
+
+  // レポートモードで起動
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('admin-view').style.display = 'block';
+
+  const payload = decodeReportData(encoded);
+  if(!payload){
+    document.body.innerHTML =
+      '<div style="padding:40px;text-align:center;color:#e11d48;font-size:14px">データの読み込みに失敗しました</div>';
+    return true;
+  }
+
+  // 管理画面スタイルでレポート表示
+  const hdrIc = document.getElementById('adm-hdr-ic');
+  const hdrTtl = document.getElementById('adm-hdr-title');
+  if(hdrIc)  hdrIc.textContent  = '📊';
+  if(hdrTtl) hdrTtl.textContent = '保護者レポート';
+
+  showCloudReport(payload);
+  document.getElementById('adm-main').style.display = 'block';
+  document.getElementById('adm-pw-screen').style.display = 'none';
+  return true;
+}
+
+// 「今すぐ同期」は共有URLモーダルを開くだけに変更
+function manualSync(){
+  openShareModal();
+}
+function scheduleSync(){ /* 不要 */ }
+function pushToCloud(){ return Promise.resolve(); }
+function updateSyncBtn(){
+  const btn = document.getElementById('share-btn');
+  // share-btnは常に表示
+}
+function startAutoSync(){ /* 不要 */ }
+function applyFixedSyncConfig(){ /* 不要 */ }
+function getSyncConfig(){ return {}; }
+function saveSyncConfig(cfg){ /* 不要 */ }
+
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
-ldST();
-render();
-checkHash();
-updateReviewBadge();
-renderGameBanner();
-applyFixedSyncConfig(); // 固定設定を自動セット
-updateSyncBtn();
-startAutoSync();
+// レポートモードチェック（URLに?reportがあれば親スマホレポート表示）
+if(!checkReportMode()){
+  ldST();
+  render();
+  checkHash();
+  updateReviewBadge();
+  renderGameBanner();
+}
 // チャットボタンを押した時にキーがなければ自動表示（起動時は表示しない）
 
 </script>
